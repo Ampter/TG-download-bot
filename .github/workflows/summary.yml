@@ -31,8 +31,11 @@ jobs:
 
       - name: Run AI inference
         id: inference
+        # Use continue-on-error so a 429 doesn't break your CI/CD pipeline
+        continue-on-error: true 
         uses: actions/ai-inference@v1
         with:
+          model: gpt-4o-mini  # Optimized for free tier
           prompt: |
             You are an expert developer.
             
@@ -40,33 +43,36 @@ jobs:
             ${{ env.CODE_CONTEXT }}
 
             TASK:
-            1. Categorize this issue as exactly one of these: [bug, feature, question].
-            2. Summarize the issue in one paragraph.
-            3. Provide troubleshooting or a code snippet based on the REFERENCE CODE.
+            1. Categorize as: [bug, feature, question].
+            2. Summarize and provide code/tips.
 
             ISSUE:
             Title: ${{ github.event.issue.title }}
             Body: ${{ github.event.issue.body }}
 
-            FORMAT YOUR RESPONSE EXACTLY LIKE THIS:
+            FORMAT:
             LABEL: [category]
-            SUMMARY: [your summary and tips]
+            SUMMARY: [text]
 
-      - name: Parse AI Response and Comment
-        id: parse
+      - name: Parse and Comment
+        # Only run if the AI step actually succeeded
+        if: steps.inference.outcome == 'success'
         run: |
-          # Extract label and summary using grep/sed
           RAW_RESPONSE="${{ steps.inference.outputs.response }}"
           LABEL=$(echo "$RAW_RESPONSE" | grep "LABEL:" | sed 's/LABEL: //I' | tr -d '[]' | xargs)
           SUMMARY=$(echo "$RAW_RESPONSE" | sed -n '/SUMMARY:/,$p' | sed 's/SUMMARY: //I')
 
-          echo "Detected Label: $LABEL"
-          
-          # Add the comment
           gh issue comment $ISSUE_NUMBER --body "$SUMMARY"
-          
-          # Apply the label (creates it if it doesn't exist)
           gh issue edit $ISSUE_NUMBER --add-label "$LABEL"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+
+      - name: Handle Rate Limit/Error
+        # Run this only if the AI inference failed (e.g., 429 Too Many Requests)
+        if: steps.inference.outcome == 'failure'
+        run: |
+          gh issue comment $ISSUE_NUMBER --body "⚠️ **AI Summary Unavailable:** The GitHub Models API is currently at its rate limit or experiencing an error. I will try again when the next issue is opened."
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
