@@ -1,17 +1,16 @@
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from downloader import download_video
+import os
 
-# Replace 'YOUR_TOKEN_HERE' with the token from BotFather
-TOKEN = 'YOUR_TOKEN_HERE'
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(f"Hello {update.effective_user.first_name}!")
-
-if __name__ == '__main__':
-    app = ApplicationBuilder().token(TOKEN).build()
-    
-    # Register the /start command handler
-    app.add_handler(CommandHandler("start", start))
-    
-    print("Bot is running...")
-    app.run_polling()
+async def handle_message(update, context):
+    url = update.message.text
+    if "youtube.com" in url or "youtu.be" in url:
+        sent_msg = await update.message.reply_text("⏳ Downloading... please wait.")
+        
+        file_path = download_video(url)
+        
+        if file_path:
+            await update.message.reply_video(video=open(file_path, 'rb'))
+            os.remove(file_path) # Clean up Fedora storage after sending
+            await sent_msg.delete()
+        else:
+            await sent_msg.edit_text("❌ Failed to download. Video might be too large (>50MB).")
