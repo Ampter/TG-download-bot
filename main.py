@@ -17,7 +17,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user and update.effective_message:
         await update.effective_message.reply_text(
-            f"Hello {user.first_name}! 👋\nSend me a YouTube link and I'll download it for you."
+            f"Hello! 👋\nSend me a YouTube link and I'll download it for you."
         )
 
 # 3. Download and Sending Logic

@@ -35,4 +35,6 @@ async def test_start_command(mocker):
     await start(update, context)
 
     # Verify the bot called reply_text with the right name
-    update.effective_message.reply_text.assert_called_with("Hello!")
+    update.effective_message.reply_text.assert_called_with(
+    "Hello! 👋\nSend me a YouTube link and I'll download it for you."
+    )
