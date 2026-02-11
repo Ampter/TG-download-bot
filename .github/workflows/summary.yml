@@ -1,4 +1,4 @@
-name: Summarize new issues
+name: Summarize and Label Issues
 
 on:
   issues:
@@ -9,27 +9,64 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       issues: write
-      models: read
       contents: read
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Read local code
+        id: context
+        run: |
+          echo "CODE_CONTEXT<<EOF" >> $GITHUB_ENV
+          echo "### PROJECT STRUCTURE ###"
+          ls -R | grep -vE 'venv|.git|__pycache__'
+          
+          echo -e "\n### MAIN BOT CODE (main.py) ###"
+          if [ -f main.py ]; then cat main.py; else echo "main.py not found"; fi
+          
+          echo -e "\n### REQUIREMENTS ###"
+          if [ -f requirements.txt ]; then cat requirements.txt; else echo "No requirements.txt"; fi
+          echo "EOF" >> $GITHUB_ENV
+
       - name: Run AI inference
         id: inference
         uses: actions/ai-inference@v1
         with:
           prompt: |
-            This repo uses python and python-telegram-bot.
-            Summarize the following GitHub issue in one paragraph and give basic troubelshooting tips if necessary, or if it is a feature addition how to implement it (code snippets):
+            You are an expert developer.
+            
+            REFERENCE CODE:
+            ${{ env.CODE_CONTEXT }}
+
+            TASK:
+            1. Categorize this issue as exactly one of these: [bug, feature, question].
+            2. Summarize the issue in one paragraph.
+            3. Provide troubleshooting or a code snippet based on the REFERENCE CODE.
+
+            ISSUE:
             Title: ${{ github.event.issue.title }}
             Body: ${{ github.event.issue.body }}
 
-      - name: Comment with AI summary
+            FORMAT YOUR RESPONSE EXACTLY LIKE THIS:
+            LABEL: [category]
+            SUMMARY: [your summary and tips]
+
+      - name: Parse AI Response and Comment
+        id: parse
         run: |
-          gh issue comment $ISSUE_NUMBER --body '${{ steps.inference.outputs.response }}'
+          # Extract label and summary using grep/sed
+          RAW_RESPONSE="${{ steps.inference.outputs.response }}"
+          LABEL=$(echo "$RAW_RESPONSE" | grep "LABEL:" | sed 's/LABEL: //I' | tr -d '[]' | xargs)
+          SUMMARY=$(echo "$RAW_RESPONSE" | sed -n '/SUMMARY:/,$p' | sed 's/SUMMARY: //I')
+
+          echo "Detected Label: $LABEL"
+          
+          # Add the comment
+          gh issue comment $ISSUE_NUMBER --body "$SUMMARY"
+          
+          # Apply the label (creates it if it doesn't exist)
+          gh issue edit $ISSUE_NUMBER --add-label "$LABEL"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
-          RESPONSE: ${{ steps.inference.outputs.response }}
