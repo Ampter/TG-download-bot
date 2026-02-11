@@ -1,0 +1,78 @@
+name: Summarize and Label Issues
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  summary:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read local code
+        id: context
+        run: |
+          echo "CODE_CONTEXT<<EOF" >> $GITHUB_ENV
+          echo "### PROJECT STRUCTURE ###"
+          ls -R | grep -vE 'venv|.git|__pycache__'
+          
+          echo -e "\n### MAIN BOT CODE (main.py) ###"
+          if [ -f main.py ]; then cat main.py; else echo "main.py not found"; fi
+          
+          echo -e "\n### REQUIREMENTS ###"
+          if [ -f requirements.txt ]; then cat requirements.txt; else echo "No requirements.txt"; fi
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Run AI inference
+        id: inference
+        # Use continue-on-error so a 429 doesn't break your CI/CD pipeline
+        continue-on-error: true 
+        uses: actions/ai-inference@v1
+        with:
+          model: gpt-4o-mini  # Optimized for free tier
+          prompt: |
+            You are an expert developer.
+            
+            REFERENCE CODE:
+            ${{ env.CODE_CONTEXT }}
+
+            TASK:
+            1. Categorize as: [bug, feature, question].
+            2. Summarize and provide code/tips.
+
+            ISSUE:
+            Title: ${{ github.event.issue.title }}
+            Body: ${{ github.event.issue.body }}
+
+            FORMAT:
+            LABEL: [category]
+            SUMMARY: [text]
+
+      - name: Parse and Comment
+        # Only run if the AI step actually succeeded
+        if: steps.inference.outcome == 'success'
+        run: |
+          RAW_RESPONSE="${{ steps.inference.outputs.response }}"
+          LABEL=$(echo "$RAW_RESPONSE" | grep "LABEL:" | sed 's/LABEL: //I' | tr -d '[]' | xargs)
+          SUMMARY=$(echo "$RAW_RESPONSE" | sed -n '/SUMMARY:/,$p' | sed 's/SUMMARY: //I')
+
+          gh issue comment $ISSUE_NUMBER --body "$SUMMARY"
+          gh issue edit $ISSUE_NUMBER --add-label "$LABEL"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+
+      - name: Handle Rate Limit/Error
+        # Run this only if the AI inference failed (e.g., 429 Too Many Requests)
+        if: steps.inference.outcome == 'failure'
+        run: |
+          gh issue comment $ISSUE_NUMBER --body "⚠️ **AI Summary Unavailable:** The GitHub Models API is currently at its rate limit or experiencing an error. I will try again when the next issue is opened."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
