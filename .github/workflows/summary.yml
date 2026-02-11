@@ -21,7 +21,8 @@ jobs:
         uses: actions/ai-inference@v1
         with:
           prompt: |
-            Summarize the following GitHub issue in one paragraph and give basic troubelshooting tips if necessary:
+            This repo uses python and python-telegram-bot.
+            Summarize the following GitHub issue in one paragraph and give basic troubelshooting tips if necessary, or if it is a feature addition how to implement it (code snippets):
             Title: ${{ github.event.issue.title }}
             Body: ${{ github.event.issue.body }}
 
