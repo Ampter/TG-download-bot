@@ -1,14 +1,12 @@
-# 3.12 because it is stable
 FROM python:3.12-slim
-
-# Install ffmpeg
-RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
-
-# copy files
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    curl \
+    && curl -fsSL https://deb.nodesource.com | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY requirements.txt .
-
-# Run 
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 CMD ["python", "main.py"]
