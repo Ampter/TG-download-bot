@@ -5,3 +5,4 @@ pytest
 pytest-asyncio
 pytest-mock
 flask
+yt-dlp-get-pot
