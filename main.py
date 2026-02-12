@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 TOKEN = os.getenv('BOT_TOKEN')
-ADMIN_ID = os.getenv('ADMIN_ID') # Add your ID to Render Env Vars
+ADMIN_ID = os.getenv('ADMIN_ID')
 
 app = Flask(__name__)
 @app.route('/')
