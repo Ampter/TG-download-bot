@@ -9,39 +9,35 @@ def download_video(url: str, download_folder: str = "downloads"):
         os.makedirs(download_folder)
 
     ydl_opts = {
-        'extractor_args': {'youtube': {'player_client': ['ios']}}, 
         'format': 'bestaudio/best',
+        'noplaylist': True,
+        # Use the built-in PO Token framework
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['web', 'ios'],
+                'po_token': ['web+automatic'], # Let yt-dlp try to handle it
+            }
+        },
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
             'preferredquality': '192',
         }],
         'outtmpl': f'{download_folder}/%(title)s.%(ext)s',
-        'noplaylist': True,
         'restrictfilenames': True,
-        # Quiet stops yt-dlp from flooding logs, but we still capture errors
-        'quiet': True, 
-        'no_warnings': False,
     }
 
     try:
-        logger.info(f"Attempting to download: {url}")
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # This will now utilize Deno from your Dockerfile to solve JS puzzles
             info = ydl.extract_info(url, download=True)
             if not info:
-                return None, "Could not extract info"
-                
+                return None, "Extraction failed"
+            
             base_path = ydl.prepare_filename(info)
-            # yt-dlp converts to mp3, so we check for that extension
             file_path = os.path.splitext(base_path)[0] + ".mp3"
             
-            logger.info(f"Download complete: {file_path}")
             return file_path, None
-            
-    except yt_dlp.utils.DownloadError as e:
-        clean_error = str(e).split(';')[0] # Shorten the error message
-        logger.error(f"yt-dlp DownloadError: {clean_error}")
-        return None, "YouTube blocked the request or link is dead"
     except Exception as e:
-        logger.error(f"Unexpected error in downloader: {e}")
+        logger.error(f"Download error: {e}")
         return None, str(e)
