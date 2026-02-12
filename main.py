@@ -23,14 +23,7 @@ def health_check(): return "Bot Active", 200
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
-
-# --- NEW: ADMIN NOTIFICATION FUNCTION ---
-async def notify_admin(context: ContextTypes.DEFAULT_TYPE, error_msg: str):
-    if ADMIN_ID:
-        try:
-            await context.bot.send_message(chat_id=ADMIN_ID, text=f"⚠️ **Admin Alert**\n\nError: `{error_msg}`")
-        except Exception as e:
-            logger.error(f"Failed to notify admin: {e}")
+    
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.effective_message.reply_text("🎵 Send me a YouTube link!")
@@ -53,15 +46,15 @@ async def handle_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 os.remove(file_path)
                 await status_msg.delete()
             except Exception as e:
-                # Notify Admin of Upload Failures
-                await notify_admin(context, f"Telegram Upload Fail: {e}")
-                await msg.reply_text(f"❌ Upload error: {e}")
+                logger.error(f"Telegram Upload Fail: {e}")
+                await msg.reply_text("❌ Failed to send audio.")
         else:
-            # Notify Admin of YouTube Blocks/Download Failures
-            await notify_admin(context, f"Download Fail ({url}): {error}")
-            await status_msg.edit_text(f"❌ Error: {error}")
+            # Shortened error for the user, full error stays in Render logs
+            logger.error(f"Download Fail ({url}): {error}")
+            await status_msg.edit_text("❌ YouTube blocked the request. Please try again later.")
     else:
-        await msg.reply_text("❌ Invalid link.")
+        await msg.reply_text("❌ Please send a valid YouTube link.")
+
 
 def main():
     if not TOKEN: return
