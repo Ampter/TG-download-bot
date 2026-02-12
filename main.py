@@ -1,74 +1,69 @@
 import os
-import asyncio
+import threading
+from flask import Flask
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 from telegram.constants import ChatAction
-
-# Import the function from your downloader.py
 from downloader import download_video
 
-# 1. Load Environment Variables
 load_dotenv()
 TOKEN = os.getenv('BOT_TOKEN')
 
-# 2. Greeting Logic (/start)
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    if user and update.effective_message:
-        await update.effective_message.reply_text(
-            f"Hello! 👋\nSend me a YouTube link and I'll download it for you."
-        )
+# Flask Heartbeat for Render
+app = Flask(__name__)
+@app.route('/')
+def health_check():
+    return "Bot is running!", 200
 
-# 3. Download and Sending Logic
+def run_flask():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Send me a YouTube link and I'll send you the MP3! 🎧") #type: ignore
+
 async def handle_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.text:
+    # Use effective_message to avoid NoneType errors
+    msg = update.effective_message
+    if not msg or not msg.text: 
         return
 
-    url = update.message.text
+    url = msg.text
     
-    # Simple check for YouTube links
     if "youtube.com" in url or "youtu.be" in url:
-        status_msg = await update.message.reply_text("⏳ Processing your link...")
+        status_msg = await msg.reply_text("⏳ Converting to MP3...")
         
-        # Show "Uploading video" status in the top bar
         await context.bot.send_chat_action(
-            chat_id=update.effective_chat.id, 
-            action=ChatAction.UPLOAD_VIDEO
+            chat_id=update.effective_chat.id, #type: ignore
+            action=ChatAction.UPLOAD_VOICE
         )
 
-        # Run downloader (runs in a separate thread if needed, but simple for now)
         file_path = download_video(url)
 
         if file_path and os.path.exists(file_path):
             try:
-                with open(file_path, 'rb') as video_file:
-                    await update.message.reply_video(
-                        video=video_file,
-                        caption="Here is your video! 📥"
+                with open(file_path, 'rb') as audio_file:
+                    await msg.reply_audio(
+                        audio=audio_file, 
+                        title=os.path.basename(file_path)
                     )
-                os.remove(file_path)  # Cleanup Fedora storage
+                os.remove(file_path)
                 await status_msg.delete()
             except Exception as e:
-                await status_msg.edit_text(f"❌ Error sending file: {str(e)}")
+                await status_msg.edit_text(f"❌ Send error: {str(e)}")
         else:
-            await status_msg.edit_text("❌ Download failed. The video might be too large (>50MB).")
+            await status_msg.edit_text("❌ Download failed.")
     else:
-        await update.message.reply_text("Please send a valid YouTube link!")
+        await msg.reply_text("Please send a valid YouTube link!")
 
 def main():
-    if not TOKEN:
-        print("Error: BOT_TOKEN not found in .env file!")
-        return
-
-    app = ApplicationBuilder().token(TOKEN).build()
-
-    # Register Handlers
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_download))
-
-    print("Bot is running... Press Ctrl+C to stop.")
-    app.run_polling()
+    if not TOKEN: return
+    threading.Thread(target=run_flask, daemon=True).start()
+    bot = ApplicationBuilder().token(TOKEN).build()
+    bot.add_handler(CommandHandler("start", start))
+    bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_download))
+    bot.run_polling()
 
 if __name__ == "__main__":
     main()
