@@ -6,18 +6,24 @@ from downloader import download_video
 def test_download_folder_creation(tmp_path):
     """Checks if the downloader creates the folder if it doesn't exist."""
     test_folder = tmp_path / "test_downloads"
-    # Mocking yt-dlp so it doesn't actually download anything
+    
     with patch('yt_dlp.YoutubeDL') as mock_ydl:
+        # Mock the info dictionary
         mock_ydl.return_value.__enter__.return_value.extract_info.return_value = {
-            'title': 'test_video', 'ext': 'mp4'
+            'title': 'test_video', 
+            'ext': 'mp4',
+            'duration': 120
         }
         mock_ydl.return_value.__enter__.return_value.prepare_filename.return_value = str(test_folder / "test.mp4")
-        
-        # We need to mock os.path.exists to simulate the file being 'downloaded'
+
         with patch('os.path.exists', return_value=True):
-            result = download_video("https://fake-url.com", download_folder=str(test_folder))
-            assert result is not None
-            assert "test_downloads" in result
+            # UNPACK the result (path, error) or (path, title, duration) 
+            # depending on which version of downloader.py you used last
+            result_path, *others = download_video("https://fake-url.com", download_folder=str(test_folder))
+            
+            assert result_path is not None
+            assert "test_downloads" in result_path
+
 
 # 2. Test Bot Command (Async)
 @pytest.mark.asyncio
