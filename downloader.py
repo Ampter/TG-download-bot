@@ -1,5 +1,8 @@
 import os
 import yt_dlp
+import logging
+
+logger = logging.getLogger(__name__)
 
 def download_video(url: str, download_folder: str = "downloads"):
     if not os.path.exists(download_folder):
@@ -12,20 +15,32 @@ def download_video(url: str, download_folder: str = "downloads"):
             'preferredcodec': 'mp3',
             'preferredquality': '192',
         }],
-        # Use a template that avoids issues with special characters
         'outtmpl': f'{download_folder}/%(title)s.%(ext)s',
         'noplaylist': True,
         'restrictfilenames': True,
+        # Quiet stops yt-dlp from flooding logs, but we still capture errors
+        'quiet': True, 
+        'no_warnings': False,
     }
 
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl: #type: ignore
+        logger.info(f"Attempting to download: {url}")
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
-            # Get the expected filename and force the .mp3 extension check
+            if not info:
+                return None, "Could not extract info"
+                
             base_path = ydl.prepare_filename(info)
+            # yt-dlp converts to mp3, so we check for that extension
             file_path = os.path.splitext(base_path)[0] + ".mp3"
             
-            return file_path
+            logger.info(f"Download complete: {file_path}")
+            return file_path, None
+            
+    except yt_dlp.utils.DownloadError as e:
+        clean_error = str(e).split(';')[0] # Shorten the error message
+        logger.error(f"yt-dlp DownloadError: {clean_error}")
+        return None, "YouTube blocked the request or link is dead"
     except Exception as e:
-        print(f"Error downloading audio: {e}")
-        return None
+        logger.error(f"Unexpected error in downloader: {e}")
+        return None, str(e)
