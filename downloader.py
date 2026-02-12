@@ -9,6 +9,7 @@ def download_video(url: str, download_folder: str = "downloads"):
         os.makedirs(download_folder)
 
     ydl_opts = {
+        'extractor_args': {'youtube': {'player_client': ['ios']}}, 
         'format': 'bestaudio/best',
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
