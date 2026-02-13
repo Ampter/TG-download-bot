@@ -1,3 +1,4 @@
+
 name: Python package
 
 on:
@@ -8,34 +9,19 @@ on:
 
 jobs:
   build:
+
     runs-on: ubuntu-latest
-    # Required to create issues using the built-in GITHUB_TOKEN
-    permissions:
-      issues: write
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.12"]
 
     steps:
-    
     - uses: actions/checkout@v4
-
-    - name: Test repository access
-      run: |
-        git ls-remote https://github.com/${{ github.repository }}.git HEAD
-
-    - name: Check token permissions
-      run: |
-          curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-               -H "Accept: application/vnd.github.v3+json" \
-               https://api.github.com/repos/${{ github.repository }}
-
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v3
       with:
         python-version: ${{ matrix.python-version }}
-
     - name: Install dependencies
       run: |
         sudo apt-get update
@@ -43,39 +29,12 @@ jobs:
         python -m pip install --upgrade pip
         python -m pip install flake8 pytest
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-
     - name: Lint with flake8
       run: |
         # stop the build if there are Python syntax errors or undefined names
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-
-    # Test step with output capture and continue‑on‑error
     - name: Test with pytest
-      id: test
-      continue-on-error: true          # allow workflow to continue even if tests fail
       run: |
-        pytest 2>&1 | tee pytest_output.txt   # save output while showing it in the log
-
-    - name: Create issue on failure
-      if: steps.test.outcome == 'failure'
-      run: |
-        # Avoid creating duplicate issues for the same commit
-        if gh issue list --label "bug" --state open --search "Test failure in ${{ github.sha }}" --json number | grep -q '"number"'; then
-          echo "Issue already exists for this commit, skipping."
-        else
-          # Read the last 20 lines of test output (where errors appear)
-          ERROR_DETAILS=$(tail -20 pytest_output.txt)
-          gh issue create \
-            --title "Test failure in ${{ github.sha }}" \
-            --body "**Tests failed** in commit ${{ github.sha }}.  
-            **Error details (last 20 lines):**  
-            \`\`\`
-            $ERROR_DETAILS
-            \`\`\`  
-            See [run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for full logs." \
-            --label "bug"
-        fi
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        pytest
