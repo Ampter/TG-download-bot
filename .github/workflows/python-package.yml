@@ -9,8 +9,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # 👇 Add permissions to create issues
+    # Add permissions to create issues
     permissions:
+      contents: read
       issues: write
     strategy:
       fail-fast: false
@@ -18,7 +19,7 @@ jobs:
         python-version: ["3.12"]
 
     steps:
-    # ✅ Keep original checkout (no extra parameters)
+    # Keep original checkout (no extra parameters)
     - uses: actions/checkout@v4
 
     - name: Set up Python ${{ matrix.python-version }}
@@ -39,14 +40,14 @@ jobs:
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
-    # 👇 Modified test step with continue-on-error and output capture
+    # Modified test step with continue-on-error and output capture
     - name: Test with pytest
       id: test
       continue-on-error: true
       run: |
         pytest 2>&1 | tee pytest_output.txt
 
-    # 👇 New step to create issue on failure
+    # New step to create issue on failure
     - name: Create issue on failure
       if: steps.test.outcome == 'failure'
       run: |
