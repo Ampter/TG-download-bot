@@ -9,23 +9,22 @@ def download_video(url: str, download_folder: str = "downloads"):
         os.makedirs(download_folder)
 
     ydl_opts = {
-    'format': 'bestaudio/best',
-    'noplaylist': True,
-    # 'cookiefile': 'cookies.txt',  # You might not even need this anymore!
-    'extractor_args': {
-        'youtube': {
-            'player_client': ['android', 'web'],
-            # The plugin will automatically handle PO tokens via the local server
-        }
-    },
-    'postprocessors': [{
-        'key': 'FFmpegExtractAudio',
-        'preferredcodec': 'mp3',
-        'preferredquality': '192',
-    }],
-    'outtmpl': f'{download_folder}/%(title)s.%(ext)s',
-    'restrictfilenames': True,
-}
+        'format': 'bestaudio/best',
+        'noplaylist': True,
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'web'],
+                'po_token': f'bgutilhttp:base_url=http://127.0.0.1:4416',
+            }
+        },
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',
+        }],
+        'outtmpl': f'{download_folder}/%(title)s.%(ext)s',
+        'restrictfilenames': True,
+    }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
