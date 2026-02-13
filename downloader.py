@@ -11,11 +11,10 @@ def download_video(url: str, download_folder: str = "downloads"):
     ydl_opts = {
         'format': 'bestaudio/best',
         'noplaylist': True,
-        # Use the built-in PO Token framework
         'extractor_args': {
             'youtube': {
-                'player_client': ['web', 'ios'],
-                'po_token': ['web+automatic'], # Let yt-dlp try to handle it
+                'player_client': ['android', 'web'],
+                'po_token': f'bgutilhttp:base_url=http://127.0.0.1:4416',
             }
         },
         'postprocessors': [{
