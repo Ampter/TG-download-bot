@@ -45,15 +45,15 @@ async def handle_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await msg.reply_audio(audio=audio, title=os.path.basename(file_path))
                 os.remove(file_path)
                 await status_msg.delete()
-            except Exception as e:
-                logger.error(f"Telegram Upload Fail: {e}")
-                await msg.reply_text("❌ Failed to send audio.")
-        else:
+        #    except Exception as e:
+       #         logger.error(f"Telegram Upload Fail: {e}")
+      #          await msg.reply_text("❌ Failed to send audio.")
+      #  else:
             # Shortened error for the user, full error stays in Render logs
-            logger.error(f"Download Fail ({url}): {error}")
-            await status_msg.edit_text("❌ YouTube blocked the request. Please try again later.")
-    else:
-        await msg.reply_text("❌ Please send a valid YouTube link.")
+    #        logger.error(f"Download Fail ({url}): {error}")
+     #       await status_msg.edit_text("❌ YouTube blocked the request. Please try again later.")
+   # else:
+    #    await msg.reply_text("❌ Please send a valid YouTube link.")
 
 
 def main():
