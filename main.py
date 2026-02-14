@@ -52,8 +52,8 @@ async def handle_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Shortened error for the user, full error stays in Render logs
             logger.error(f"Download Fail ({url}): {error}")
             await status_msg.edit_text("❌ YouTube blocked the request. Please try again later.")
-        else:
-           await msg.reply_text("❌ Please send a valid YouTube link.")
+    else:
+        await msg.reply_text("❌ Please send a valid YouTube link.")
 
 
 def main():
