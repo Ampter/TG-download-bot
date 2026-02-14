@@ -11,8 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     # Add permissions to create issues
     permissions:
-      contents: read
-      issues: write
+      write-all
+     # contents: read
+     # issues: write
     strategy:
       fail-fast: false
       matrix:
