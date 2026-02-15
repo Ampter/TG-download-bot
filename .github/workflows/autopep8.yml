@@ -55,10 +55,5 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add .
-          # Only commit if there are actual changes
-          if ! git diff --quiet && git diff --staged --quiet; then
-            git commit -m "Auto-format Python code with autopep8"
-            git push
-          else
-            echo "No changes to commit after formatting."
-          fi
+          git commit -m "Auto-format Python code with autopep8"
+          git push
