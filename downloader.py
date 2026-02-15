@@ -1,12 +1,12 @@
 import logging
 import os
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple, cast
 
 import yt_dlp
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MAX_SIZE_MB = int(os.getenv("MAX_VIDEO_SIZE_MB", "1900"))
+DEFAULT_MAX_SIZE_MB = int(os.getenv("MAX_VIDEO_SIZE_MB", "2000"))
 
 
 def _video_format(max_size_mb: int) -> str:
@@ -28,7 +28,7 @@ def download_video(
 ) -> Tuple[Optional[str], Optional[str]]:
     os.makedirs(download_folder, exist_ok=True)
 
-    ydl_opts = {
+    ydl_opts: dict[str, Any] = {
         "format": _video_format(max_size_mb),
         "noplaylist": True,
         "merge_output_format": "mp4",
@@ -45,7 +45,7 @@ def download_video(
     }
 
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        with yt_dlp.YoutubeDL(cast(Any, ydl_opts)) as ydl:
             info = ydl.extract_info(url, download=True)
             if not info:
                 return None, "Extraction failed"

@@ -9,7 +9,8 @@ Telegram bot that downloads YouTube videos and sends them back in chat.
 - Accepts `youtube.com` and `youtu.be` links.
 - Downloads video with `yt-dlp` (prefers MP4).
 - Uploads video to Telegram as a document (better for larger files).
-- Configurable download and upload size limits.
+- Shows an in-chat progress bar while uploading.
+- Configurable download size limit (upload cap fixed at 2000MB).
 - Includes a lightweight Flask healthcheck endpoint for hosting platforms.
 
 ---
@@ -30,16 +31,15 @@ Create a `.env` file in the project root:
 
 ```env
 BOT_TOKEN=your_telegram_bot_token
-MAX_VIDEO_SIZE_MB=1900
-MAX_UPLOAD_SIZE_MB=2000
+MAX_VIDEO_SIZE_MB=2000
 PORT=10000
 ```
 
 ### Variable notes
 
 - `BOT_TOKEN` (**required**): Telegram bot token from BotFather.
-- `MAX_VIDEO_SIZE_MB`: max target size when selecting stream formats to download.
-- `MAX_UPLOAD_SIZE_MB`: max file size this bot will upload to Telegram.
+- `MAX_VIDEO_SIZE_MB`: max target size when selecting stream formats to download (capped at 2000MB).
+- Upload cap is fixed in code to 2000MB.
 - `PORT`: Flask healthcheck server port (`/` returns `Bot Active`).
 
 ---
@@ -93,8 +93,7 @@ docker build -t tg-download-bot .
 ```bash
 docker run --rm \
   -e BOT_TOKEN=your_telegram_bot_token \
-  -e MAX_VIDEO_SIZE_MB=1900 \
-  -e MAX_UPLOAD_SIZE_MB=2000 \
+  -e MAX_VIDEO_SIZE_MB=2000 \
   -e PORT=10000 \
   -p 10000:10000 \
   tg-download-bot
@@ -125,7 +124,6 @@ Bot Active
 4. Set environment variables in Render dashboard:
    - `BOT_TOKEN`
    - `MAX_VIDEO_SIZE_MB` (optional)
-   - `MAX_UPLOAD_SIZE_MB` (optional)
    - `PORT` (Render usually injects this automatically)
 5. Deploy.
 6. Open the service URL and confirm `/` returns `Bot Active`.
@@ -147,8 +145,8 @@ pytest -q
 - **"Please send a valid YouTube link"**: Ensure the message contains `youtube.com` or `youtu.be`.
 - **Download fails**: Provider may not be running on `http://127.0.0.1:4416`.
 - **Upload fails for very large files**:
-  - Increase `MAX_UPLOAD_SIZE_MB`.
-  - Ensure your Telegram bot/file limits are compatible with target file size.
+  - Bot upload cap is fixed to `2000MB`.
+  - If Telegram still rejects uploads, your endpoint may enforce a lower upstream limit.
 - **No response from bot**: Verify `BOT_TOKEN` and check logs.
 
 ---

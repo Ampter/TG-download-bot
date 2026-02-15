@@ -4,10 +4,11 @@ from unittest.mock import AsyncMock, patch
 import pytest
 import yt_dlp
 from telegram import Chat, Message, Update, User
+from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
 from downloader import download_video
-from main import handle_download, start
+from main import MAX_UPLOAD_SIZE_MB, handle_download, start
 
 
 @pytest.fixture
@@ -89,7 +90,9 @@ async def test_handle_download_valid_youtube(
     fake_mp4 = tmp_path / "test.mp4"
     fake_mp4.write_bytes(b"x" * 1024)
 
-    monkeypatch.setattr("main.download_video", lambda _: (str(fake_mp4), None))
+    monkeypatch.setattr(
+        "main.download_video", lambda *args, **kwargs: (str(fake_mp4), None)
+    )
 
     with patch("os.remove") as mock_remove:
         await handle_download(mock_update, mock_context)
@@ -118,7 +121,9 @@ async def test_handle_download_failure(mock_update, mock_context, monkeypatch):
     status_mock = AsyncMock()
     mock_update.effective_message.reply_text = AsyncMock(return_value=status_mock)
 
-    monkeypatch.setattr("main.download_video", lambda _: (None, "Download failed"))
+    monkeypatch.setattr(
+        "main.download_video", lambda *args, **kwargs: (None, "Download failed")
+    )
 
     with patch("os.path.exists", return_value=False):
         await handle_download(mock_update, mock_context)
@@ -139,13 +144,42 @@ async def test_handle_download_above_configured_limit(
     fake_mp4 = tmp_path / "big.mp4"
     fake_mp4.write_bytes(b"x" * 1024)
 
-    monkeypatch.setattr("main.download_video", lambda _: (str(fake_mp4), None))
+    monkeypatch.setattr(
+        "main.download_video", lambda *args, **kwargs: (str(fake_mp4), None)
+    )
     monkeypatch.setattr("main.MAX_UPLOAD_SIZE_MB", 0)
 
     with patch("os.remove") as mock_remove:
         await handle_download(mock_update, mock_context)
 
     status_mock.edit_text.assert_awaited()
+    mock_remove.assert_called_once_with(str(fake_mp4))
+
+
+@pytest.mark.asyncio
+async def test_handle_download_telegram_413(
+    mock_update, mock_context, tmp_path, monkeypatch
+):
+    mock_update.effective_message.text = "https://youtu.be/abc123"
+    status_mock = AsyncMock()
+    mock_update.effective_message.reply_text = AsyncMock(return_value=status_mock)
+
+    fake_mp4 = tmp_path / "too_big.mp4"
+    fake_mp4.write_bytes(b"x" * 1024)
+
+    monkeypatch.setattr(
+        "main.download_video", lambda *args, **kwargs: (str(fake_mp4), None)
+    )
+    mock_update.effective_message.reply_document = AsyncMock(
+        side_effect=BadRequest("Request Entity Too Large")
+    )
+
+    with patch("os.remove") as mock_remove:
+        await handle_download(mock_update, mock_context)
+
+    status_mock.edit_text.assert_awaited_once_with(
+        f"❌ Telegram rejected the file as too large. App limit is set to {MAX_UPLOAD_SIZE_MB}MB."
+    )
     mock_remove.assert_called_once_with(str(fake_mp4))
 
 
