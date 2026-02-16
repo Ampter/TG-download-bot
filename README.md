@@ -35,6 +35,11 @@ Create a `.env` file in the project root:
 BOT_TOKEN=your_telegram_bot_token
 MAX_VIDEO_SIZE_MB=2000
 MAX_UPLOAD_SIZE_MB=50
+BOT_RUNTIME_MODE=polling
+# Required in webhook mode (for serverless platforms).
+WEBHOOK_BASE_URL=
+WEBHOOK_PATH=telegram/webhook
+WEBHOOK_SECRET_TOKEN=
 # Optional yt-dlp cookies for YouTube anti-bot pages.
 YTDLP_COOKIES_FILE=
 YTDLP_COOKIES_B64=
@@ -54,6 +59,10 @@ PORT=10000
 - `BOT_TOKEN` (**required**): Telegram bot token from BotFather.
 - `MAX_VIDEO_SIZE_MB`: max target size when selecting stream formats to download (clamped to upload limit).
 - `MAX_UPLOAD_SIZE_MB`: desired upload cap. With public Telegram API, effective limit is 50MB.
+- `BOT_RUNTIME_MODE`: `polling` (default) or `webhook`.
+- `WEBHOOK_BASE_URL`: required for webhook mode, e.g. `https://<service>.containers.yandexcloud.net`.
+- `WEBHOOK_PATH`: optional path segment for webhook endpoint (default `telegram/webhook`).
+- `WEBHOOK_SECRET_TOKEN`: optional shared secret for Telegram webhook validation.
 - `YTDLP_COOKIES_FILE` (optional): absolute path to a Netscape-format cookie file used by yt-dlp.
 - `YTDLP_COOKIES_B64` (optional): base64-encoded Netscape-format cookie file content (useful on Render).
 - `YTDLP_BGUTIL_BASE_URL` (optional): bgutil HTTP provider URL (default `http://127.0.0.1:4416`).
@@ -186,6 +195,27 @@ Deploy it:
 6. Open the bot web service URL and confirm `/` returns `Bot Active`.
 
 > **Tip:** If you want better resilience for temporary downloads on some platforms, attach a persistent disk and keep the app `downloads/` directory on that volume.
+
+---
+
+## Deploying on Yandex Cloud (free-tier friendly)
+
+Use webhook mode with Serverless Containers so the bot scales to zero between requests.
+
+Files included for this flow:
+
+- `deploy/yandex/deploy_free_tier.sh`
+- `deploy/yandex/README.md`
+
+Quick deploy:
+
+```bash
+export BOT_TOKEN='your_telegram_bot_token'
+export WEBHOOK_SECRET_TOKEN='optional-secret'
+./deploy/yandex/deploy_free_tier.sh
+```
+
+This script builds/pushes the Docker image, deploys a serverless revision, and sets Telegram webhook automatically.
 
 ---
 
