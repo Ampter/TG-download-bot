@@ -38,6 +38,7 @@ MAX_UPLOAD_SIZE_MB=50
 # Optional: set these only for a self-hosted Telegram Bot API server.
 TELEGRAM_BOT_API_BASE_URL=
 TELEGRAM_BOT_API_FILE_URL=
+TELEGRAM_BOT_API_HOSTPORT=
 APP_ENV=local
 INSTANCE_NAME=local-dev
 PORT=10000
@@ -50,6 +51,7 @@ PORT=10000
 - `MAX_UPLOAD_SIZE_MB`: desired upload cap. With public Telegram API, effective limit is 50MB.
 - `TELEGRAM_BOT_API_BASE_URL` (optional): self-hosted Bot API base URL, e.g. `http://localhost:8081/bot`.
 - `TELEGRAM_BOT_API_FILE_URL` (optional): self-hosted Bot API file URL, e.g. `http://localhost:8081/file/bot`.
+- `TELEGRAM_BOT_API_HOSTPORT` (optional): shorthand `host:port`; app auto-builds both URLs from it.
 - `APP_ENV` (optional): environment label shown in startup/conflict logs (for example `local`, `staging`, `prod`).
 - `INSTANCE_NAME` (optional): stable instance label shown in startup/conflict logs.
 - `PORT`: Flask healthcheck server port (`/` returns `Bot Active`).
@@ -128,27 +130,79 @@ Bot Active
 
 ---
 
+## Self-hosted Bot API example config
+
+This repo includes a complete local self-hosted example in:
+
+- `deploy/self-hosted/.env.example`
+- `deploy/self-hosted/docker-compose.yml`
+- `deploy/self-hosted/README.md`
+
+Quick start:
+
+```bash
+cd deploy/self-hosted
+cp .env.example .env
+docker compose up -d --build
+```
+
+---
+
 ## Deploying on Render
 
+### Option A: Bot only (public Telegram API, ~50MB upload cap)
+
 1. Push this repo to GitHub.
-2. In Render, create a **Web Service** from the repo.
-3. Use:
-   - **Environment**: Docker
-   - **Build Command**: *(leave empty, Dockerfile handles it)*
-   - **Start Command**: *(leave empty, Dockerfile CMD uses `/start.sh`)*
-4. Set environment variables in Render dashboard:
+2. In Render, create a **Web Service** from this repo.
+3. Use Docker environment (no custom build/start command required).
+4. Set required env vars (`BOT_TOKEN`, plus any optional values from `.env.example`).
+
+### Option B: Bot + self-hosted Bot API (up to 2000MB uploads)
+
+This repo includes a Render Blueprint at `render.yaml` with:
+
+- `tg-download-bot` (web service)
+- `telegram-bot-api` (private service)
+
+Deploy it:
+
+1. Push this repo to GitHub.
+2. In Render, click **New** -> **Blueprint**.
+3. Select this repo and keep `render.yaml`.
+4. Fill secret env vars in the Blueprint form:
    - `BOT_TOKEN`
-   - `MAX_VIDEO_SIZE_MB` (optional)
-   - `MAX_UPLOAD_SIZE_MB` (optional)
-   - `TELEGRAM_BOT_API_BASE_URL` (optional)
-   - `TELEGRAM_BOT_API_FILE_URL` (optional)
-   - `APP_ENV` (optional)
-   - `INSTANCE_NAME` (optional)
-   - `PORT` (Render usually injects this automatically)
-5. Deploy.
-6. Open the service URL and confirm `/` returns `Bot Active`.
+   - `TELEGRAM_API_ID`
+   - `TELEGRAM_API_HASH`
+   - `TELEGRAM_BOT_API_HOSTPORT` is wired automatically from the private service.
+5. Apply the Blueprint.
+6. Open the bot web service URL and confirm `/` returns `Bot Active`.
 
 > **Tip:** If you want better resilience for temporary downloads on some platforms, attach a persistent disk and keep the app `downloads/` directory on that volume.
+
+---
+
+## Minimum Render specs (smooth operation)
+
+Render service instance specs (from Render docs):
+
+- Starter: `512 MB RAM / 0.5 CPU`
+- Standard: `2 GB RAM / 1 CPU`
+- Pro: `4 GB RAM / 2 CPU`
+
+Recommended minimums for this project:
+
+- Public Telegram API deployment (no self-hosted Bot API):
+  - Bot service: **Standard** (`2 GB / 1 CPU`) for smoother ffmpeg transcodes
+  - Disk: `10 GB` persistent disk for temporary media files
+- Self-hosted Bot API deployment:
+  - Bot service: **Standard** (`2 GB / 1 CPU`)
+  - Bot API private service: **Standard** (`2 GB / 1 CPU`)
+  - Disks: bot `10 GB`, bot-api `20 GB`
+
+Notes:
+
+- Persistent disks are available on paid services and are single-instance only.
+- If CPU or memory usage is consistently high in Render Metrics, move to **Pro**.
 
 ---
 
