@@ -10,6 +10,9 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_MAX_SIZE_MB = int(os.getenv("MAX_VIDEO_SIZE_MB", "2000"))
 _COOKIEFILE_CACHE: Optional[str] = None
+DEFAULT_BGUTIL_BASE_URL = os.getenv(
+    "YTDLP_BGUTIL_BASE_URL", "http://127.0.0.1:4416"
+)
 
 
 def _video_format(max_size_mb: int) -> str:
@@ -72,16 +75,24 @@ def _is_youtube_antibot_error(message: str) -> bool:
     )
 
 
-def _build_ydl_opts(max_size_mb: int, cookiefile: Optional[str]) -> dict[str, Any]:
+def _build_ydl_opts(
+    max_size_mb: int,
+    cookiefile: Optional[str],
+    disable_innertube: bool = False,
+) -> dict[str, Any]:
+    provider_args: dict[str, list[str]] = {
+        "base_url": [DEFAULT_BGUTIL_BASE_URL]
+    }
+    if disable_innertube:
+        provider_args["disable_innertube"] = ["1"]
+
     opts: dict[str, Any] = {
         "format": _video_format(max_size_mb),
         "noplaylist": True,
         "merge_output_format": "mp4",
         "extractor_args": {
-            "youtube": {
-                "player_client": ["android", "web"],
-                "po_token": "bgutilhttp:base_url=http://127.0.0.1:4416",
-            }
+            # Plugin-specific provider args for bgutil HTTP token provider.
+            "youtubepot-bgutilhttp": provider_args,
         },
         "outtmpl": "downloads/%(title)s.%(ext)s",
         "restrictfilenames": True,
@@ -100,42 +111,64 @@ def download_video(
 ) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
     os.makedirs(download_folder, exist_ok=True)
     cookiefile = _get_cookiefile_from_env()
-    ydl_opts = _build_ydl_opts(max_size_mb=max_size_mb, cookiefile=cookiefile)
-    ydl_opts["outtmpl"] = f"{download_folder}/%(title)s.%(ext)s"
+    last_error_text: Optional[str] = None
+    retry_with_legacy_innertube = not cookiefile
 
-    try:
-        with yt_dlp.YoutubeDL(cast(Any, ydl_opts)) as ydl:
-            info = ydl.extract_info(url, download=True)
-            if not info:
-                return None, "Extraction failed", None, None
+    for disable_innertube in (False, True):
+        if disable_innertube and not retry_with_legacy_innertube:
+            continue
 
-            title = info.get("title")
-            author = info.get("uploader") or info.get(
-                "channel") or info.get("creator")
+        ydl_opts = _build_ydl_opts(
+            max_size_mb=max_size_mb,
+            cookiefile=cookiefile,
+            disable_innertube=disable_innertube,
+        )
+        ydl_opts["outtmpl"] = f"{download_folder}/%(title)s.%(ext)s"
 
-            file_path = ydl.prepare_filename(info)
-            if not os.path.exists(file_path):
-                base, _ = os.path.splitext(file_path)
-                mp4_path = f"{base}.mp4"
-                if os.path.exists(mp4_path):
-                    file_path = mp4_path
+        try:
+            with yt_dlp.YoutubeDL(cast(Any, ydl_opts)) as ydl:
+                info = ydl.extract_info(url, download=True)
+                if not info:
+                    return None, "Extraction failed", None, None
 
-            if not os.path.exists(file_path):
-                return (
-                    None,
-                    "Download completed but output file was not found",
-                    title,
-                    author,
+                title = info.get("title")
+                author = info.get("uploader") or info.get(
+                    "channel") or info.get("creator")
+
+                file_path = ydl.prepare_filename(info)
+                if not os.path.exists(file_path):
+                    base, _ = os.path.splitext(file_path)
+                    mp4_path = f"{base}.mp4"
+                    if os.path.exists(mp4_path):
+                        file_path = mp4_path
+
+                if not os.path.exists(file_path):
+                    return (
+                        None,
+                        "Download completed but output file was not found",
+                        title,
+                        author,
+                    )
+
+                return file_path, None, title, author
+        except Exception as exc:
+            last_error_text = str(exc)
+            if (
+                _is_youtube_antibot_error(last_error_text)
+                and not disable_innertube
+                and retry_with_legacy_innertube
+            ):
+                logger.warning(
+                    "Anti-bot check hit. Retrying with disable_innertube=1."
                 )
+                continue
+            if _is_youtube_antibot_error(last_error_text) and not cookiefile:
+                logger.error(
+                    "Download error: %s (set YTDLP_COOKIES_FILE or YTDLP_COOKIES_B64)",
+                    exc,
+                )
+            else:
+                logger.error("Download error: %s", exc)
+            return None, last_error_text, None, None
 
-            return file_path, None, title, author
-    except Exception as exc:
-        error_text = str(exc)
-        if _is_youtube_antibot_error(error_text) and not cookiefile:
-            logger.error(
-                "Download error: %s (set YTDLP_COOKIES_FILE or YTDLP_COOKIES_B64)",
-                exc,
-            )
-        else:
-            logger.error("Download error: %s", exc)
-        return None, error_text, None, None
+    return None, last_error_text or "Download failed", None, None

@@ -38,6 +38,8 @@ MAX_UPLOAD_SIZE_MB=50
 # Optional yt-dlp cookies for YouTube anti-bot pages.
 YTDLP_COOKIES_FILE=
 YTDLP_COOKIES_B64=
+# Optional bgutil provider URL (default shown below).
+YTDLP_BGUTIL_BASE_URL=http://127.0.0.1:4416
 # Optional: set these only for a self-hosted Telegram Bot API server.
 TELEGRAM_BOT_API_BASE_URL=
 TELEGRAM_BOT_API_FILE_URL=
@@ -54,6 +56,7 @@ PORT=10000
 - `MAX_UPLOAD_SIZE_MB`: desired upload cap. With public Telegram API, effective limit is 50MB.
 - `YTDLP_COOKIES_FILE` (optional): absolute path to a Netscape-format cookie file used by yt-dlp.
 - `YTDLP_COOKIES_B64` (optional): base64-encoded Netscape-format cookie file content (useful on Render).
+- `YTDLP_BGUTIL_BASE_URL` (optional): bgutil HTTP provider URL (default `http://127.0.0.1:4416`).
 - `TELEGRAM_BOT_API_BASE_URL` (optional): self-hosted Bot API base URL, e.g. `http://localhost:8081/bot`.
 - `TELEGRAM_BOT_API_FILE_URL` (optional): self-hosted Bot API file URL, e.g. `http://localhost:8081/file/bot`.
 - `TELEGRAM_BOT_API_HOSTPORT` (optional): shorthand `host:port`; app auto-builds both URLs from it.
@@ -229,6 +232,9 @@ pytest -q
   - For larger uploads (up to `2000MB`), use a self-hosted Bot API server and set:
     - `TELEGRAM_BOT_API_BASE_URL`
     - `TELEGRAM_BOT_API_FILE_URL`
+- **YouTube anti-bot errors on cloud hosts**:
+  - `bgutil` helps but does not guarantee bypassing all blocked-IP checks.
+  - Configure `YTDLP_COOKIES_FILE` or `YTDLP_COOKIES_B64` for best reliability.
 - **No response from bot**: Verify `BOT_TOKEN` and check logs.
 
 ---

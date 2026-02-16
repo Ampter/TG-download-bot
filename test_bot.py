@@ -1,5 +1,5 @@
 import os
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import yt_dlp
@@ -99,6 +99,75 @@ def test_download_video_uses_cookiefile(tmp_path, monkeypatch):
         assert file_path == str(fake_video)
         called_opts = MockYDL.call_args.args[0]
         assert called_opts["cookiefile"] == str(cookie_file)
+
+
+def test_download_video_uses_bgutil_provider_args(tmp_path):
+    url = "https://youtu.be/dQw4w9WgXcQ"
+
+    with patch("yt_dlp.YoutubeDL") as MockYDL:
+        instance = MockYDL.return_value.__enter__.return_value
+        instance.extract_info.return_value = {"title": "Test Video"}
+
+        fake_video = tmp_path / "Test Video.mp4"
+        fake_video.write_text("fake video")
+        instance.prepare_filename.return_value = str(fake_video)
+
+        file_path, error, _, _ = download_video(url, download_folder=str(tmp_path))
+
+        assert error is None
+        assert file_path == str(fake_video)
+        called_opts = MockYDL.call_args.args[0]
+        assert (
+            called_opts["extractor_args"]["youtubepot-bgutilhttp"]["base_url"]
+            == ["http://127.0.0.1:4416"]
+        )
+        assert "youtube" not in called_opts["extractor_args"]
+
+
+def test_download_video_retries_with_disable_innertube_on_antibot(
+    tmp_path, monkeypatch
+):
+    url = "https://youtu.be/retry"
+    monkeypatch.delenv("YTDLP_COOKIES_FILE", raising=False)
+    monkeypatch.delenv("YTDLP_COOKIES_B64", raising=False)
+
+    fake_video = tmp_path / "retry.mp4"
+    fake_video.write_text("fake video")
+
+    first_cm = MagicMock()
+    first_instance = first_cm.__enter__.return_value
+    first_instance.extract_info.side_effect = yt_dlp.utils.DownloadError(
+        "Sign in to confirm you're not a bot"
+    )
+
+    second_cm = MagicMock()
+    second_instance = second_cm.__enter__.return_value
+    second_instance.extract_info.return_value = {"title": "Retry Video"}
+    second_instance.prepare_filename.return_value = str(fake_video)
+
+    with patch("yt_dlp.YoutubeDL", side_effect=[first_cm, second_cm]) as MockYDL:
+        file_path, error, title, author = download_video(
+            url, download_folder=str(tmp_path)
+        )
+
+        assert error is None
+        assert file_path == str(fake_video)
+        assert title == "Retry Video"
+        assert author is None
+        assert MockYDL.call_count == 2
+
+        first_opts = MockYDL.call_args_list[0].args[0]
+        second_opts = MockYDL.call_args_list[1].args[0]
+        assert (
+            "disable_innertube"
+            not in first_opts["extractor_args"]["youtubepot-bgutilhttp"]
+        )
+        assert (
+            second_opts["extractor_args"]["youtubepot-bgutilhttp"][
+                "disable_innertube"
+            ]
+            == ["1"]
+        )
 
 
 @pytest.mark.asyncio
