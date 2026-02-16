@@ -1,0 +1,50 @@
+services:
+  - type: web
+    name: tg-download-bot
+    runtime: docker
+    plan: standard
+    dockerfilePath: ./Dockerfile
+    autoDeployTrigger: commit
+    healthCheckPath: /
+    disk:
+      name: downloads
+      mountPath: /app/downloads
+      sizeGB: 10
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: MAX_VIDEO_SIZE_MB
+        value: "2000"
+      - key: MAX_UPLOAD_SIZE_MB
+        value: "2000"
+      - key: TELEGRAM_BOT_API_HOSTPORT
+        fromService:
+          type: pserv
+          name: telegram-bot-api
+          property: hostport
+      - key: APP_ENV
+        value: render
+      - key: INSTANCE_NAME
+        value: render-bot
+      - key: PORT
+        value: "10000"
+
+  - type: pserv
+    name: telegram-bot-api
+    runtime: image
+    plan: standard
+    image:
+      url: docker.io/aiogram/telegram-bot-api:latest
+    disk:
+      name: botapi-data
+      mountPath: /var/lib/telegram-bot-api
+      sizeGB: 20
+    envVars:
+      - key: TELEGRAM_API_ID
+        sync: false
+      - key: TELEGRAM_API_HASH
+        sync: false
+      - key: TELEGRAM_LOCAL
+        value: "1"
+      - key: TELEGRAM_HTTP_PORT
+        value: "8081"
