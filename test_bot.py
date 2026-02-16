@@ -48,10 +48,14 @@ def test_download_video_success(tmp_path):
         fake_video.write_text("fake video")
         instance.prepare_filename.return_value = str(fake_video)
 
-        file_path, error = download_video(url, download_folder=str(tmp_path))
+        file_path, error, title, author = download_video(
+            url, download_folder=str(tmp_path)
+        )
 
         assert error is None
         assert file_path == str(fake_video)
+        assert title == "Test Video"
+        assert author is None
         instance.extract_info.assert_called_once_with(url, download=True)
 
 
@@ -64,10 +68,14 @@ def test_download_video_failure(tmp_path):
             "Sign in to confirm"
         )
 
-        file_path, error = download_video(url, download_folder=str(tmp_path))
+        file_path, error, title, author = download_video(
+            url, download_folder=str(tmp_path)
+        )
 
         assert file_path is None
         assert "Sign in to confirm" in error
+        assert title is None
+        assert author is None
 
 
 @pytest.mark.asyncio
@@ -91,7 +99,8 @@ async def test_handle_download_valid_youtube(
     fake_mp4.write_bytes(b"x" * 1024)
 
     monkeypatch.setattr(
-        "main.download_video", lambda *args, **kwargs: (str(fake_mp4), None)
+        "main.download_video",
+        lambda *args, **kwargs: (str(fake_mp4), None, "Video title", "Video author"),
     )
 
     with patch("os.remove") as mock_remove:
@@ -100,6 +109,10 @@ async def test_handle_download_valid_youtube(
     mock_update.effective_message.reply_text.assert_any_call("⏳ Downloading video...")
     mock_context.bot.send_chat_action.assert_called_once()
     mock_update.effective_message.reply_document.assert_called_once()
+    assert (
+        mock_update.effective_message.reply_document.call_args.kwargs["caption"]
+        == "🎬 Video title\n👤 Video author"
+    )
     status_mock.delete.assert_awaited_once()
     mock_remove.assert_called_once_with(str(fake_mp4))
 
@@ -122,7 +135,8 @@ async def test_handle_download_failure(mock_update, mock_context, monkeypatch):
     mock_update.effective_message.reply_text = AsyncMock(return_value=status_mock)
 
     monkeypatch.setattr(
-        "main.download_video", lambda *args, **kwargs: (None, "Download failed")
+        "main.download_video",
+        lambda *args, **kwargs: (None, "Download failed", None, None),
     )
 
     with patch("os.path.exists", return_value=False):
@@ -145,9 +159,14 @@ async def test_handle_download_above_configured_limit(
     fake_mp4.write_bytes(b"x" * 1024)
 
     monkeypatch.setattr(
-        "main.download_video", lambda *args, **kwargs: (str(fake_mp4), None)
+        "main.download_video",
+        lambda *args, **kwargs: (str(fake_mp4), None, "Video title", "Video author"),
     )
     monkeypatch.setattr("main.MAX_UPLOAD_SIZE_MB", 0)
+    monkeypatch.setattr(
+        "main._compress_video_to_limit",
+        AsyncMock(return_value=(None, "Compression failed")),
+    )
 
     with patch("os.remove") as mock_remove:
         await handle_download(mock_update, mock_context)
@@ -168,7 +187,8 @@ async def test_handle_download_telegram_413(
     fake_mp4.write_bytes(b"x" * 1024)
 
     monkeypatch.setattr(
-        "main.download_video", lambda *args, **kwargs: (str(fake_mp4), None)
+        "main.download_video",
+        lambda *args, **kwargs: (str(fake_mp4), None, "Video title", "Video author"),
     )
     mock_update.effective_message.reply_document = AsyncMock(
         side_effect=BadRequest("Request Entity Too Large")

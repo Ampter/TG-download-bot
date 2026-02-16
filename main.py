@@ -1,15 +1,18 @@
 import asyncio
 import logging
 import os
+import socket
 import threading
+from asyncio.subprocess import DEVNULL
 from contextlib import suppress
 from typing import BinaryIO, cast
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 from flask import Flask
 from telegram import Update
 from telegram.constants import ChatAction
-from telegram.error import BadRequest
+from telegram.error import BadRequest, Conflict
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -28,12 +31,47 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
-MAX_UPLOAD_SIZE_MB = 2000
+APP_ENV = os.getenv("APP_ENV", "local")
+INSTANCE_NAME = os.getenv("INSTANCE_NAME", socket.gethostname())
+HOSTNAME = socket.gethostname()
+PROCESS_ID = os.getpid()
+BOT_API_BASE_URL = os.getenv("TELEGRAM_BOT_API_BASE_URL")
+BOT_API_FILE_URL = os.getenv("TELEGRAM_BOT_API_FILE_URL")
+DEFAULT_PUBLIC_API_UPLOAD_LIMIT_MB = 50
+DEFAULT_LOCAL_API_UPLOAD_LIMIT_MB = 2000
+
+
+def _is_public_telegram_api(base_url: str | None) -> bool:
+    if not base_url:
+        return True
+    parsed = urlparse(base_url)
+    return parsed.hostname == "api.telegram.org"
+
+
+ENDPOINT_UPLOAD_LIMIT_MB = (
+    DEFAULT_PUBLIC_API_UPLOAD_LIMIT_MB
+    if _is_public_telegram_api(BOT_API_BASE_URL)
+    else DEFAULT_LOCAL_API_UPLOAD_LIMIT_MB
+)
+CONFIGURED_MAX_UPLOAD_SIZE_MB = int(
+    os.getenv("MAX_UPLOAD_SIZE_MB", str(ENDPOINT_UPLOAD_LIMIT_MB))
+)
+MAX_UPLOAD_SIZE_MB = min(CONFIGURED_MAX_UPLOAD_SIZE_MB, ENDPOINT_UPLOAD_LIMIT_MB)
 MAX_VIDEO_SIZE_MB = min(
     int(os.getenv("MAX_VIDEO_SIZE_MB", str(MAX_UPLOAD_SIZE_MB))),
     MAX_UPLOAD_SIZE_MB,
 )
 DOWNLOAD_TARGET_SIZE_MB = MAX_VIDEO_SIZE_MB
+
+if CONFIGURED_MAX_UPLOAD_SIZE_MB > ENDPOINT_UPLOAD_LIMIT_MB:
+    logger.warning(
+        "MAX_UPLOAD_SIZE_MB=%s exceeds endpoint limit=%sMB; using %sMB. "
+        "Set TELEGRAM_BOT_API_BASE_URL/TELEGRAM_BOT_API_FILE_URL to a self-hosted "
+        "Bot API server for larger uploads.",
+        CONFIGURED_MAX_UPLOAD_SIZE_MB,
+        ENDPOINT_UPLOAD_LIMIT_MB,
+        MAX_UPLOAD_SIZE_MB,
+    )
 
 app = Flask(__name__)
 
@@ -61,9 +99,27 @@ def _format_bytes(num_bytes: int) -> str:
     return f"{megabytes / 1024:.2f}GB"
 
 
-def _upload_progress_text(sent_bytes: int, total_bytes: int) -> str:
+def _truncate_text(value: str | None, max_len: int, fallback: str) -> str:
+    if not value:
+        return fallback
+    cleaned = " ".join(value.split())
+    if len(cleaned) <= max_len:
+        return cleaned
+    return f"{cleaned[:max_len - 3]}..."
+
+
+def _upload_progress_text(
+    sent_bytes: int,
+    total_bytes: int,
+    video_title: str,
+    video_author: str,
+) -> str:
     if total_bytes <= 0:
-        return "⬆️ Uploading video..."
+        return (
+            "⬆️ Uploading video...\n"
+            f"🎬 {video_title}\n"
+            f"👤 {video_author}"
+        )
 
     percent = min(100, int((sent_bytes * 100) / total_bytes))
     bar_width = 20
@@ -71,12 +127,118 @@ def _upload_progress_text(sent_bytes: int, total_bytes: int) -> str:
     bar = "#" * filled + "-" * (bar_width - filled)
     return (
         "⬆️ Uploading video...\n"
+        f"🎬 {video_title}\n"
+        f"👤 {video_author}\n"
         f"[{bar}] {percent}%\n"
         f"{_format_bytes(sent_bytes)} / {_format_bytes(total_bytes)}"
     )
 
 
-async def _track_upload_progress(status_msg, progress_reader: UploadProgressReader):
+def _token_fingerprint(token: str | None) -> str:
+    if not token:
+        return "missing"
+    return f"...{token[-6:]}"
+
+
+async def _probe_duration_seconds(file_path: str) -> float | None:
+    try:
+        process = await asyncio.create_subprocess_exec(
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=nokey=1:noprint_wrappers=1",
+            file_path,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except FileNotFoundError:
+        return None
+    stdout, _ = await process.communicate()
+    if process.returncode != 0:
+        return None
+    try:
+        duration = float(stdout.decode().strip())
+    except ValueError:
+        return None
+    if duration <= 0:
+        return None
+    return duration
+
+
+async def _compress_video_to_limit(
+    file_path: str,
+    max_size_mb: int,
+) -> tuple[str | None, str | None]:
+    duration_seconds = await _probe_duration_seconds(file_path)
+    if duration_seconds is None:
+        return None, "Could not determine video duration for compression"
+
+    target_size_bytes = int(max_size_mb * 1024 * 1024 * 0.95)
+    if target_size_bytes <= 0:
+        return None, "Invalid upload size limit"
+
+    audio_bitrate_kbps = 96
+    total_bitrate_kbps = int((target_size_bytes * 8) / (duration_seconds * 1000))
+    video_bitrate_kbps = max(200, total_bitrate_kbps - audio_bitrate_kbps)
+    max_rate_kbps = int(video_bitrate_kbps * 1.1)
+    buffer_size_kbps = max(video_bitrate_kbps * 2, 400)
+
+    base_name, _ = os.path.splitext(file_path)
+    compressed_path = f"{base_name}.compressed.mp4"
+
+    try:
+        process = await asyncio.create_subprocess_exec(
+            "ffmpeg",
+            "-y",
+            "-i",
+            file_path,
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-b:v",
+            f"{video_bitrate_kbps}k",
+            "-maxrate",
+            f"{max_rate_kbps}k",
+            "-bufsize",
+            f"{buffer_size_kbps}k",
+            "-c:a",
+            "aac",
+            "-b:a",
+            f"{audio_bitrate_kbps}k",
+            "-movflags",
+            "+faststart",
+            compressed_path,
+            stdout=DEVNULL,
+            stderr=DEVNULL,
+        )
+    except FileNotFoundError:
+        return None, "ffmpeg is not installed"
+    await process.wait()
+
+    if process.returncode != 0 or not os.path.exists(compressed_path):
+        with suppress(FileNotFoundError):
+            os.remove(compressed_path)
+        return None, "ffmpeg compression failed"
+
+    max_size_bytes = max_size_mb * 1024 * 1024
+    if os.path.getsize(compressed_path) > max_size_bytes:
+        with suppress(FileNotFoundError):
+            os.remove(compressed_path)
+        return None, "Compressed file is still above upload limit"
+
+    return compressed_path, None
+
+
+async def _track_upload_progress(
+    status_msg,
+    progress_reader: UploadProgressReader,
+    video_title: str,
+    video_author: str,
+):
     last_step = -1
     while True:
         total_bytes = progress_reader.total_bytes
@@ -87,7 +249,12 @@ async def _track_upload_progress(status_msg, progress_reader: UploadProgressRead
         if step != last_step:
             try:
                 await status_msg.edit_text(
-                    _upload_progress_text(sent_bytes=sent_bytes, total_bytes=total_bytes)
+                    _upload_progress_text(
+                        sent_bytes=sent_bytes,
+                        total_bytes=total_bytes,
+                        video_title=video_title,
+                        video_author=video_author,
+                    )
                 )
             except BadRequest as exc:
                 if "Message is not modified" not in str(exc):
@@ -140,7 +307,9 @@ async def handle_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
             action=ChatAction.UPLOAD_VIDEO,
         )
 
-    file_path, error = download_video(url, max_size_mb=DOWNLOAD_TARGET_SIZE_MB)
+    file_path, error, video_title, video_author = download_video(
+        url, max_size_mb=DOWNLOAD_TARGET_SIZE_MB
+    )
 
     if not file_path or not os.path.exists(file_path):
         logger.error("Download failed (%s): %s", url, error)
@@ -149,27 +318,52 @@ async def handle_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    display_title = _truncate_text(
+        video_title or os.path.splitext(os.path.basename(file_path))[0],
+        max_len=90,
+        fallback="Unknown title",
+    )
+    display_author = _truncate_text(
+        video_author,
+        max_len=70,
+        fallback="Unknown author",
+    )
+
     file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
     if file_size_mb > MAX_UPLOAD_SIZE_MB:
-        os.remove(file_path)
         await status_msg.edit_text(
-            f"❌ Video is {file_size_mb:.1f}MB, above the configured upload limit "
-            f"({MAX_UPLOAD_SIZE_MB}MB)."
+            f"⚙️ Video is {file_size_mb:.1f}MB, above the upload limit "
+            f"({MAX_UPLOAD_SIZE_MB}MB).\nCompressing to fit..."
         )
-        return
+        compressed_file_path, compress_error = await _compress_video_to_limit(
+            file_path=file_path, max_size_mb=MAX_UPLOAD_SIZE_MB
+        )
+        if compressed_file_path is None:
+            os.remove(file_path)
+            await status_msg.edit_text(
+                "❌ Video is too large and could not be compressed to fit the upload "
+                "limit."
+            )
+            logger.error("Compression failed: %s", compress_error)
+            return
+        os.remove(file_path)
+        file_path = compressed_file_path
 
     try:
         file_size_bytes = os.path.getsize(file_path)
         with open(file_path, "rb") as raw_video:
             progress_video = UploadProgressReader(raw_video, total_bytes=file_size_bytes)
             progress_task = asyncio.create_task(
-                _track_upload_progress(status_msg, progress_video)
+                _track_upload_progress(
+                    status_msg, progress_video, display_title, display_author
+                )
             )
             upload_completed = False
             try:
                 await msg.reply_document(
                     document=cast(BinaryIO, progress_video),
                     filename=os.path.basename(file_path),
+                    caption=f"🎬 {display_title}\n👤 {display_author}",
                     read_timeout=1200,
                     write_timeout=1200,
                     connect_timeout=120,
@@ -204,13 +398,42 @@ async def handle_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     if not TOKEN:
+        logger.error("BOT_TOKEN is not set. Bot cannot start.")
         return
 
+    logger.info(
+        "Starting bot instance env=%s instance=%s host=%s pid=%s token=%s upload_limit_mb=%s",
+        APP_ENV,
+        INSTANCE_NAME,
+        HOSTNAME,
+        PROCESS_ID,
+        _token_fingerprint(TOKEN),
+        MAX_UPLOAD_SIZE_MB,
+    )
+
     threading.Thread(target=run_flask, daemon=True).start()
-    bot = ApplicationBuilder().token(TOKEN).build()
+    app_builder = ApplicationBuilder().token(TOKEN)
+    if BOT_API_BASE_URL:
+        app_builder = app_builder.base_url(BOT_API_BASE_URL)
+    if BOT_API_FILE_URL:
+        app_builder = app_builder.base_file_url(BOT_API_FILE_URL)
+
+    bot = app_builder.build()
     bot.add_handler(CommandHandler("start", start))
     bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_download))
-    bot.run_polling()
+    try:
+        bot.run_polling()
+    except Conflict:
+        logger.error(
+            "Another bot instance is already running with this BOT_TOKEN. "
+            "Stop the other instance or use a separate token per environment. "
+            "env=%s instance=%s host=%s pid=%s token=%s",
+            APP_ENV,
+            INSTANCE_NAME,
+            HOSTNAME,
+            PROCESS_ID,
+            _token_fingerprint(TOKEN),
+        )
 
 
 if __name__ == "__main__":

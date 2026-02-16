@@ -25,7 +25,7 @@ def download_video(
     url: str,
     download_folder: str = "downloads",
     max_size_mb: int = DEFAULT_MAX_SIZE_MB,
-) -> Tuple[Optional[str], Optional[str]]:
+) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
     os.makedirs(download_folder, exist_ok=True)
 
     ydl_opts: dict[str, Any] = {
@@ -48,7 +48,10 @@ def download_video(
         with yt_dlp.YoutubeDL(cast(Any, ydl_opts)) as ydl:
             info = ydl.extract_info(url, download=True)
             if not info:
-                return None, "Extraction failed"
+                return None, "Extraction failed", None, None
+
+            title = info.get("title")
+            author = info.get("uploader") or info.get("channel") or info.get("creator")
 
             file_path = ydl.prepare_filename(info)
             if not os.path.exists(file_path):
@@ -58,9 +61,14 @@ def download_video(
                     file_path = mp4_path
 
             if not os.path.exists(file_path):
-                return None, "Download completed but output file was not found"
+                return (
+                    None,
+                    "Download completed but output file was not found",
+                    title,
+                    author,
+                )
 
-            return file_path, None
+            return file_path, None, title, author
     except Exception as exc:
         logger.error("Download error: %s", exc)
-        return None, str(exc)
+        return None, str(exc), None, None
