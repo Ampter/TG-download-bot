@@ -3,6 +3,7 @@ import logging
 import os
 import socket
 import threading
+import time
 from asyncio.subprocess import DEVNULL
 from contextlib import suppress
 from typing import BinaryIO, cast
@@ -69,6 +70,7 @@ MAX_VIDEO_SIZE_MB = min(
     MAX_UPLOAD_SIZE_MB,
 )
 DOWNLOAD_TARGET_SIZE_MB = MAX_VIDEO_SIZE_MB
+_last_conflict_log_time = 0.0
 
 if CONFIGURED_MAX_UPLOAD_SIZE_MB > ENDPOINT_UPLOAD_LIMIT_MB:
     logger.warning(
@@ -145,6 +147,52 @@ def _token_fingerprint(token: str | None) -> str:
     if not token:
         return "missing"
     return f"...{token[-6:]}"
+
+
+def _friendly_download_error(error: str | None) -> str:
+    if not error:
+        return "❌ Failed to download video. Please try again later."
+
+    lowered = error.lower()
+    if (
+        "sign in to confirm" in lowered
+        and "you" in lowered
+        and "not a bot" in lowered
+    ):
+        return (
+            "❌ YouTube blocked this download with anti-bot verification.\n"
+            "Try another video or configure yt-dlp cookies "
+            "(YTDLP_COOKIES_FILE / YTDLP_COOKIES_B64)."
+        )
+    if "video unavailable" in lowered:
+        return "❌ This video is unavailable. Try a different link."
+    return "❌ Failed to download video. Please try again later."
+
+
+async def _telegram_error_handler(
+    update: object,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    global _last_conflict_log_time
+
+    error = context.error
+    if isinstance(error, Conflict):
+        now = time.time()
+        if now - _last_conflict_log_time >= 60:
+            logger.error(
+                "Telegram getUpdates conflict. Another bot instance is using this "
+                "BOT_TOKEN. Keep only one active instance per token. "
+                "env=%s instance=%s host=%s pid=%s token=%s",
+                APP_ENV,
+                INSTANCE_NAME,
+                HOSTNAME,
+                PROCESS_ID,
+                _token_fingerprint(TOKEN),
+            )
+            _last_conflict_log_time = now
+        return
+
+    logger.exception("Unhandled Telegram error: %s", error, exc_info=error)
 
 
 async def _probe_duration_seconds(file_path: str) -> float | None:
@@ -322,9 +370,7 @@ async def handle_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not file_path or not os.path.exists(file_path):
         logger.error("Download failed (%s): %s", url, error)
-        await status_msg.edit_text(
-            "❌ Failed to download video. Please try again later."
-        )
+        await status_msg.edit_text(_friendly_download_error(error))
         return
 
     display_title = _truncate_text(
@@ -429,6 +475,7 @@ def main():
         app_builder = app_builder.base_file_url(BOT_API_FILE_URL)
 
     bot = app_builder.build()
+    bot.add_error_handler(_telegram_error_handler)
     bot.add_handler(CommandHandler("start", start))
     bot.add_handler(MessageHandler(
         filters.TEXT & (~filters.COMMAND), handle_download))

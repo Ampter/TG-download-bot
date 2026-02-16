@@ -1,5 +1,7 @@
+import base64
 import logging
 import os
+import tempfile
 from typing import Any, Optional, Tuple, cast
 
 import yt_dlp
@@ -7,6 +9,7 @@ import yt_dlp
 logger = logging.getLogger(__name__)
 
 DEFAULT_MAX_SIZE_MB = int(os.getenv("MAX_VIDEO_SIZE_MB", "2000"))
+_COOKIEFILE_CACHE: Optional[str] = None
 
 
 def _video_format(max_size_mb: int) -> str:
@@ -21,14 +24,56 @@ def _video_format(max_size_mb: int) -> str:
     )
 
 
-def download_video(
-    url: str,
-    download_folder: str = "downloads",
-    max_size_mb: int = DEFAULT_MAX_SIZE_MB,
-) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
-    os.makedirs(download_folder, exist_ok=True)
+def _get_cookiefile_from_env() -> Optional[str]:
+    global _COOKIEFILE_CACHE
 
-    ydl_opts: dict[str, Any] = {
+    cookie_path = os.getenv("YTDLP_COOKIES_FILE")
+    if cookie_path:
+        if os.path.exists(cookie_path):
+            return cookie_path
+        logger.warning(
+            "YTDLP_COOKIES_FILE is set but file does not exist: %s",
+            cookie_path,
+        )
+
+    cookies_b64 = os.getenv("YTDLP_COOKIES_B64")
+    if not cookies_b64:
+        return None
+
+    if _COOKIEFILE_CACHE and os.path.exists(_COOKIEFILE_CACHE):
+        return _COOKIEFILE_CACHE
+
+    try:
+        cookie_bytes = base64.b64decode(cookies_b64, validate=True)
+        cookie_text = cookie_bytes.decode("utf-8")
+    except Exception as exc:
+        logger.warning("Failed to decode YTDLP_COOKIES_B64: %s", exc)
+        return None
+
+    try:
+        fd, temp_path = tempfile.mkstemp(
+            prefix="yt-dlp-cookies-", suffix=".txt")
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(cookie_text)
+        os.chmod(temp_path, 0o600)
+        _COOKIEFILE_CACHE = temp_path
+        return temp_path
+    except Exception as exc:
+        logger.warning("Failed to create temporary cookie file: %s", exc)
+        return None
+
+
+def _is_youtube_antibot_error(message: str) -> bool:
+    lower = message.lower()
+    return (
+        "sign in to confirm" in lower
+        and "you" in lower
+        and "not a bot" in lower
+    )
+
+
+def _build_ydl_opts(max_size_mb: int, cookiefile: Optional[str]) -> dict[str, Any]:
+    opts: dict[str, Any] = {
         "format": _video_format(max_size_mb),
         "noplaylist": True,
         "merge_output_format": "mp4",
@@ -38,11 +83,25 @@ def download_video(
                 "po_token": "bgutilhttp:base_url=http://127.0.0.1:4416",
             }
         },
-        "outtmpl": f"{download_folder}/%(title)s.%(ext)s",
+        "outtmpl": "downloads/%(title)s.%(ext)s",
         "restrictfilenames": True,
         "quiet": True,
         "no_warnings": True,
     }
+    if cookiefile:
+        opts["cookiefile"] = cookiefile
+    return opts
+
+
+def download_video(
+    url: str,
+    download_folder: str = "downloads",
+    max_size_mb: int = DEFAULT_MAX_SIZE_MB,
+) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
+    os.makedirs(download_folder, exist_ok=True)
+    cookiefile = _get_cookiefile_from_env()
+    ydl_opts = _build_ydl_opts(max_size_mb=max_size_mb, cookiefile=cookiefile)
+    ydl_opts["outtmpl"] = f"{download_folder}/%(title)s.%(ext)s"
 
     try:
         with yt_dlp.YoutubeDL(cast(Any, ydl_opts)) as ydl:
@@ -71,5 +130,12 @@ def download_video(
 
             return file_path, None, title, author
     except Exception as exc:
-        logger.error("Download error: %s", exc)
-        return None, str(exc), None, None
+        error_text = str(exc)
+        if _is_youtube_antibot_error(error_text) and not cookiefile:
+            logger.error(
+                "Download error: %s (set YTDLP_COOKIES_FILE or YTDLP_COOKIES_B64)",
+                exc,
+            )
+        else:
+            logger.error("Download error: %s", exc)
+        return None, error_text, None, None

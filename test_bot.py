@@ -78,6 +78,28 @@ def test_download_video_failure(tmp_path):
         assert author is None
 
 
+def test_download_video_uses_cookiefile(tmp_path, monkeypatch):
+    url = "https://youtu.be/dQw4w9WgXcQ"
+    cookie_file = tmp_path / "cookies.txt"
+    cookie_file.write_text("# Netscape HTTP Cookie File")
+    monkeypatch.setenv("YTDLP_COOKIES_FILE", str(cookie_file))
+
+    with patch("yt_dlp.YoutubeDL") as MockYDL:
+        instance = MockYDL.return_value.__enter__.return_value
+        instance.extract_info.return_value = {"title": "Test Video"}
+
+        fake_video = tmp_path / "Test Video.mp4"
+        fake_video.write_text("fake video")
+        instance.prepare_filename.return_value = str(fake_video)
+
+        file_path, error, _, _ = download_video(url, download_folder=str(tmp_path))
+
+        assert error is None
+        assert file_path == str(fake_video)
+        called_opts = MockYDL.call_args.args[0]
+        assert called_opts["cookiefile"] == str(cookie_file)
+
+
 @pytest.mark.asyncio
 async def test_start_handler(mock_update, mock_context):
     await start(mock_update, mock_context)
@@ -149,6 +171,34 @@ async def test_handle_download_failure(mock_update, mock_context, monkeypatch):
     status_mock.edit_text.assert_called_once_with(
         "❌ Failed to download video. Please try again later."
     )
+
+
+@pytest.mark.asyncio
+async def test_handle_download_antibot_failure_message(
+    mock_update, mock_context, monkeypatch
+):
+    mock_update.effective_message.text = "https://youtu.be/abc123"
+    status_mock = AsyncMock()
+    mock_update.effective_message.reply_text = AsyncMock(
+        return_value=status_mock)
+
+    monkeypatch.setattr(
+        "main.download_video",
+        lambda *args, **kwargs: (
+            None,
+            "ERROR: [youtube] xyz: Sign in to confirm you're not a bot",
+            None,
+            None,
+        ),
+    )
+
+    with patch("os.path.exists", return_value=False):
+        await handle_download(mock_update, mock_context)
+
+    status_mock.edit_text.assert_called_once()
+    error_text = status_mock.edit_text.call_args.args[0]
+    assert "anti-bot verification" in error_text
+    assert "YTDLP_COOKIES_FILE" in error_text
 
 
 @pytest.mark.asyncio

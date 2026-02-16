@@ -35,6 +35,9 @@ Create a `.env` file in the project root:
 BOT_TOKEN=your_telegram_bot_token
 MAX_VIDEO_SIZE_MB=2000
 MAX_UPLOAD_SIZE_MB=50
+# Optional yt-dlp cookies for YouTube anti-bot pages.
+YTDLP_COOKIES_FILE=
+YTDLP_COOKIES_B64=
 # Optional: set these only for a self-hosted Telegram Bot API server.
 TELEGRAM_BOT_API_BASE_URL=
 TELEGRAM_BOT_API_FILE_URL=
@@ -49,6 +52,8 @@ PORT=10000
 - `BOT_TOKEN` (**required**): Telegram bot token from BotFather.
 - `MAX_VIDEO_SIZE_MB`: max target size when selecting stream formats to download (clamped to upload limit).
 - `MAX_UPLOAD_SIZE_MB`: desired upload cap. With public Telegram API, effective limit is 50MB.
+- `YTDLP_COOKIES_FILE` (optional): absolute path to a Netscape-format cookie file used by yt-dlp.
+- `YTDLP_COOKIES_B64` (optional): base64-encoded Netscape-format cookie file content (useful on Render).
 - `TELEGRAM_BOT_API_BASE_URL` (optional): self-hosted Bot API base URL, e.g. `http://localhost:8081/bot`.
 - `TELEGRAM_BOT_API_FILE_URL` (optional): self-hosted Bot API file URL, e.g. `http://localhost:8081/file/bot`.
 - `TELEGRAM_BOT_API_HOSTPORT` (optional): shorthand `host:port`; app auto-builds both URLs from it.
