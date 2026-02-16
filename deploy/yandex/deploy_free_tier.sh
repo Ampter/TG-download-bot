@@ -11,7 +11,7 @@ if ! command -v "$YC_BIN" >/dev/null 2>&1; then
   fi
 fi
 
-if ! "$YC_BIN" config list >/dev/null 2>&1; then
+if ! "$YC_BIN" iam create-token >/dev/null 2>&1; then
   cat <<'EOF'
 Yandex CLI is not authenticated.
 Run:
@@ -47,7 +47,15 @@ import json
 import sys
 
 path = sys.argv[1]
-data = json.load(sys.stdin)
+raw = sys.stdin.read().strip()
+if not raw:
+    print("")
+    raise SystemExit(0)
+try:
+    data = json.loads(raw)
+except json.JSONDecodeError:
+    print("")
+    raise SystemExit(0)
 node = data
 for key in path.split("."):
     if isinstance(node, dict):
