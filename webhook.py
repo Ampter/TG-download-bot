@@ -68,7 +68,8 @@ def main() -> None:
     bot = app_builder.build()
     bot.add_error_handler(_telegram_error_handler)
     bot.add_handler(CommandHandler("start", start))
-    bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_download))
+    bot.add_handler(MessageHandler(
+        filters.TEXT & (~filters.COMMAND), handle_download))
 
     try:
         bot.run_webhook(
