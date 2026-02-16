@@ -52,11 +52,11 @@ jobs:
           make_latest: false
           generate_release_notes: false
           body: |
-            ## Preview Release Information
-            **Build Type:** Pull Request Preview
+            ## 📋 Release Information
+            **Build Type:** 🛠️ Pull Request Preview
             **Version:** 1.0.${{ github.run_number }}
 
-            Temporary preview build for PR #${{ github.event.pull_request.number }}.
+            This is a temporary preview build for Pull Request #${{ github.event.pull_request.number }}.
           files: dist/tg-download-bot-server.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -121,11 +121,11 @@ jobs:
           make_latest: false
           generate_release_notes: false
           body: |
-            ## Preview Release Information
-            **Build Type:** Pull Request Preview
+            ## 📋 Release Information
+            **Build Type:** 🛠️ Pull Request Preview
             **Version:** 1.0.${{ github.run_number }}
 
-            Temporary preview build for PR #${{ github.event.pull_request.number }}.
+            This is a temporary preview build for Pull Request #${{ github.event.pull_request.number }}.
           files: |
             *.deb
             *.rpm
@@ -143,9 +143,9 @@ jobs:
         with:
           message-id: "preview-build-status"
           message: |
-            ## Preview downloads ready (v1.0.${{ github.run_number }})
+            ## 🚀 Preview downloads ready! (v1.0.${{ github.run_number }})
 
-            [View Preview Release Assets](https://github.com/${{ github.repository }}/releases/tag/pr-${{ github.event.pull_request.number }})
+            🔗 **[View Preview Release Assets](https://github.com/${{ github.repository }}/releases/tag/pr-${{ github.event.pull_request.number }})**
 
             _This comment is automatically updated._
 
@@ -169,11 +169,11 @@ jobs:
 
           gh release create "$FINAL_TAG" ./final-assets/* \
             --title "Stable Release (v1.0.${{ github.run_number }})" \
-            --notes "## Release Information
-            **Build Type:** Stable Release
+            --notes "## 📋 Release Information
+            **Build Type:** ✅ Stable Release
             **Version:** 1.0.${{ github.run_number }}
 
-            Official stable build merged from PR #${{ github.event.pull_request.number }}." \
+            This is an official stable build merged from PR #${{ github.event.pull_request.number }}." \
             --generate-notes \
             --latest
       - name: Cleanup on Close
