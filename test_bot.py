@@ -92,7 +92,8 @@ def test_download_video_uses_cookiefile(tmp_path, monkeypatch):
         fake_video.write_text("fake video")
         instance.prepare_filename.return_value = str(fake_video)
 
-        file_path, error, _, _ = download_video(url, download_folder=str(tmp_path))
+        file_path, error, _, _ = download_video(
+            url, download_folder=str(tmp_path))
 
         assert error is None
         assert file_path == str(fake_video)
