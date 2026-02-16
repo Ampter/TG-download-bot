@@ -56,7 +56,8 @@ ENDPOINT_UPLOAD_LIMIT_MB = (
 CONFIGURED_MAX_UPLOAD_SIZE_MB = int(
     os.getenv("MAX_UPLOAD_SIZE_MB", str(ENDPOINT_UPLOAD_LIMIT_MB))
 )
-MAX_UPLOAD_SIZE_MB = min(CONFIGURED_MAX_UPLOAD_SIZE_MB, ENDPOINT_UPLOAD_LIMIT_MB)
+MAX_UPLOAD_SIZE_MB = min(CONFIGURED_MAX_UPLOAD_SIZE_MB,
+                         ENDPOINT_UPLOAD_LIMIT_MB)
 MAX_VIDEO_SIZE_MB = min(
     int(os.getenv("MAX_VIDEO_SIZE_MB", str(MAX_UPLOAD_SIZE_MB))),
     MAX_UPLOAD_SIZE_MB,
@@ -181,7 +182,8 @@ async def _compress_video_to_limit(
         return None, "Invalid upload size limit"
 
     audio_bitrate_kbps = 96
-    total_bitrate_kbps = int((target_size_bytes * 8) / (duration_seconds * 1000))
+    total_bitrate_kbps = int((target_size_bytes * 8) /
+                             (duration_seconds * 1000))
     video_bitrate_kbps = max(200, total_bitrate_kbps - audio_bitrate_kbps)
     max_rate_kbps = int(video_bitrate_kbps * 1.1)
     buffer_size_kbps = max(video_bitrate_kbps * 2, 400)
@@ -243,7 +245,8 @@ async def _track_upload_progress(
     while True:
         total_bytes = progress_reader.total_bytes
         sent_bytes = min(progress_reader.bytes_read, total_bytes)
-        percent = 100 if total_bytes == 0 else int((sent_bytes * 100) / total_bytes)
+        percent = 100 if total_bytes == 0 else int(
+            (sent_bytes * 100) / total_bytes)
         step = 100 if percent == 100 else (percent // 5) * 5
 
         if step != last_step:
@@ -352,7 +355,8 @@ async def handle_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         file_size_bytes = os.path.getsize(file_path)
         with open(file_path, "rb") as raw_video:
-            progress_video = UploadProgressReader(raw_video, total_bytes=file_size_bytes)
+            progress_video = UploadProgressReader(
+                raw_video, total_bytes=file_size_bytes)
             progress_task = asyncio.create_task(
                 _track_upload_progress(
                     status_msg, progress_video, display_title, display_author
@@ -420,7 +424,8 @@ def main():
 
     bot = app_builder.build()
     bot.add_handler(CommandHandler("start", start))
-    bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_download))
+    bot.add_handler(MessageHandler(
+        filters.TEXT & (~filters.COMMAND), handle_download))
     try:
         bot.run_polling()
     except Conflict:

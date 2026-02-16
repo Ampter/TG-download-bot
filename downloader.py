@@ -51,7 +51,8 @@ def download_video(
                 return None, "Extraction failed", None, None
 
             title = info.get("title")
-            author = info.get("uploader") or info.get("channel") or info.get("creator")
+            author = info.get("uploader") or info.get(
+                "channel") or info.get("creator")
 
             file_path = ydl.prepare_filename(info)
             if not os.path.exists(file_path):
