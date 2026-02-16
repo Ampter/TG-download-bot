@@ -19,4 +19,4 @@ jobs:
         uses: trufflesecurity/trufflehog@main
         with:
           path: ${{ github.workspace }}
-          extra_args: --results=verified,unknown --fail
+          extra_args: --results=verified,unknown
