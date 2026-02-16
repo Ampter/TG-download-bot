@@ -108,9 +108,9 @@ jobs:
       - name: Create DEB and RPM packages
         run: |
           fpm -s dir -t deb -n tg-download-bot-server -v 1.0.${{ github.run_number }} \
-            --prefix /usr/bin dist/tg-download-bot-server
+            dist/tg-download-bot-server=/usr/bin/tg-download-bot-server
           fpm -s dir -t rpm -n tg-download-bot-server -v 1.0.${{ github.run_number }} \
-            --prefix /usr/bin dist/tg-download-bot-server
+            dist/tg-download-bot-server=/usr/bin/tg-download-bot-server
       - name: Upload Linux assets to Preview Release
         uses: softprops/action-gh-release@v2
         with:
