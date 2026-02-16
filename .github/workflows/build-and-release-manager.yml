@@ -1,0 +1,187 @@
+name: Build and Release Manager
+
+on:
+  pull_request:
+    branches: ["main"]
+    types: [opened, synchronize, reopened, closed]
+    paths-ignore:
+      - "**.md"
+      - ".gitignore"
+      - "LICENSE"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Syntax Check
+        run: |
+          pip install flake8
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+
+  build-windows:
+    needs: check
+    if: github.event.action != 'closed'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - name: Build EXE
+        run: |
+          pip install -r requirements.txt --upgrade
+          pip install pyinstaller pyinstaller-hooks-contrib
+          pyinstaller --onefile --noconfirm --name tg-download-bot-server main.py
+      - name: Upload EXE to Preview Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: pr-${{ github.event.pull_request.number }}
+          name: Preview Build (v1.0.${{ github.run_number }})
+          prerelease: true
+          draft: false
+          make_latest: false
+          generate_release_notes: false
+          body: |
+            ## Preview Release Information
+            **Build Type:** Pull Request Preview
+            **Version:** 1.0.${{ github.run_number }}
+
+            Temporary preview build for PR #${{ github.event.pull_request.number }}.
+          files: dist/tg-download-bot-server.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-linux:
+    needs: check
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ruby ruby-dev rubygems build-essential rpm libpng-dev
+          sudo gem install --no-document fpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build Binary
+        run: |
+          pip install -r requirements.txt --upgrade
+          pip install pyinstaller
+          pyinstaller --onefile --noconfirm --name tg-download-bot-server main.py
+      - name: Install LinuxDeploy
+        id: install-linuxdeploy
+        uses: miurahr/install-linuxdeploy-action@v1.8.0
+        with:
+          plugins: appimage
+      - name: Setup AppDir and Build AppImage
+        run: |
+          mkdir -p AppDir/usr/bin
+          cp dist/tg-download-bot-server AppDir/usr/bin/tg-download-bot-server
+
+          cat > tg-download-bot-server.desktop <<EOF_DESKTOP
+          [Desktop Entry]
+          Name=TGDownloadBotServer
+          Exec=tg-download-bot-server
+          Icon=icon
+          Type=Application
+          Categories=Utility;
+          EOF_DESKTOP
+
+          echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+XzYQAAAAASUVORK5CYII=" | base64 -d > icon.png
+
+          ${{ steps.install-linuxdeploy.outputs.linuxdeploy }} --appdir AppDir \
+            --executable AppDir/usr/bin/tg-download-bot-server \
+            --desktop-file tg-download-bot-server.desktop \
+            --icon-file icon.png \
+            --output appimage
+      - name: Create DEB and RPM packages
+        run: |
+          fpm -s dir -t deb -n tg-download-bot-server -v 1.0.${{ github.run_number }} \
+            --prefix /usr/bin dist/tg-download-bot-server
+          fpm -s dir -t rpm -n tg-download-bot-server -v 1.0.${{ github.run_number }} \
+            --prefix /usr/bin dist/tg-download-bot-server
+      - name: Upload Linux assets to Preview Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: pr-${{ github.event.pull_request.number }}
+          name: Preview Build (v1.0.${{ github.run_number }})
+          prerelease: true
+          draft: false
+          make_latest: false
+          generate_release_notes: false
+          body: |
+            ## Preview Release Information
+            **Build Type:** Pull Request Preview
+            **Version:** 1.0.${{ github.run_number }}
+
+            Temporary preview build for PR #${{ github.event.pull_request.number }}.
+          files: |
+            *.deb
+            *.rpm
+            *.AppImage
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  comment-preview:
+    needs: [build-windows, build-linux]
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post Comment
+        uses: mshick/add-pr-comment@v2
+        with:
+          message-id: "preview-build-status"
+          message: |
+            ## Preview downloads ready (v1.0.${{ github.run_number }})
+
+            [View Preview Release Assets](https://github.com/${{ github.repository }}/releases/tag/pr-${{ github.event.pull_request.number }})
+
+            _This comment is automatically updated._
+
+  finalize:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Promote to Final Release
+        if: github.event.pull_request.merged == true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TEMP_TAG: pr-${{ github.event.pull_request.number }}
+          FINAL_TAG: v1.0.${{ github.run_number }}
+        run: |
+          mkdir ./final-assets
+          gh release download "$TEMP_TAG" --dir ./final-assets
+          gh release delete "$TEMP_TAG" --yes
+
+          gh release create "$FINAL_TAG" ./final-assets/* \
+            --title "Stable Release (v1.0.${{ github.run_number }})" \
+            --notes "## Release Information
+            **Build Type:** Stable Release
+            **Version:** 1.0.${{ github.run_number }}
+
+            Official stable build merged from PR #${{ github.event.pull_request.number }}." \
+            --generate-notes \
+            --latest
+      - name: Cleanup on Close
+        if: github.event.pull_request.merged != true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: pr-${{ github.event.pull_request.number }}
+        run: |
+          gh release delete "$TAG" --yes || echo "No release to delete"
+          gh api -X DELETE "repos/${{ github.repository }}/git/refs/tags/$TAG" || echo "No tag to delete"
