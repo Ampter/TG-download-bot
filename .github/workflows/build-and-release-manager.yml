@@ -89,6 +89,7 @@ jobs:
         run: |
           mkdir -p AppDir/usr/bin
           cp dist/tg-download-bot-server AppDir/usr/bin/tg-download-bot-server
+          cp .github/assets/icon.png ./icon.png
 
           cat > tg-download-bot-server.desktop <<EOF_DESKTOP
           [Desktop Entry]
@@ -98,8 +99,6 @@ jobs:
           Type=Application
           Categories=Utility;
           EOF_DESKTOP
-
-          echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+XzYQAAAAASUVORK5CYII=" | base64 -d > icon.png
 
           ${{ steps.install-linuxdeploy.outputs.linuxdeploy }} --appdir AppDir \
             --executable AppDir/usr/bin/tg-download-bot-server \
