@@ -8,7 +8,6 @@ from asyncio.subprocess import DEVNULL
 from contextlib import suppress
 from typing import BinaryIO, cast
 from urllib.parse import urlparse
-
 from dotenv import load_dotenv
 from flask import Flask
 from telegram import Update
