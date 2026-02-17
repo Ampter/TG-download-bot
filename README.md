@@ -198,26 +198,6 @@ Deploy it:
 
 ---
 
-## Deploying on Yandex Cloud (free-tier friendly)
-
-Use webhook mode with Serverless Containers so the bot scales to zero between requests.
-
-Files included for this flow:
-
-- `deploy/yandex/deploy_free_tier.sh`
-- `deploy/yandex/README.md`
-
-Quick deploy:
-
-```bash
-export BOT_TOKEN='your_telegram_bot_token'
-export WEBHOOK_SECRET_TOKEN='optional-secret'
-./deploy/yandex/deploy_free_tier.sh
-```
-
-This script builds/pushes the Docker image, deploys a serverless revision, and sets Telegram webhook automatically.
-
----
 
 ## Minimum Render specs (smooth operation)
 
