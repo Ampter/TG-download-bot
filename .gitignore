@@ -211,3 +211,6 @@ downloads/
 .mp3
 .mp4
 .continue/mcpServers/new-mcp-server.yaml
+
+# Other
+local/
