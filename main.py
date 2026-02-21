@@ -153,19 +153,26 @@ def _friendly_download_error(error: str | None) -> str:
         return "❌ Failed to download video. Please try again later."
 
     lowered = error.lower()
-    if (
-        "sign in to confirm" in lowered
-        and "you" in lowered
-        and "not a bot" in lowered
-    ):
+    # Check for various anti-bot or restricted content messages
+    is_antibot = (
+        ("sign in to confirm" in lowered and "not a bot" in lowered)
+        or "confirm you’re not a bot" in lowered
+        or "the following content is not available on this app" in lowered
+    )
+
+    if is_antibot:
         return (
-            "❌ YouTube blocked this download with anti-bot verification.\n"
-            "Try another video or configure yt-dlp cookies "
-            "(YTDLP_COOKIES_FILE / YTDLP_COOKIES_B64)."
+            "❌ YouTube blocked this download with anti-bot verification.\n\n"
+            "To fix this:\n"
+            "1. Configure yt-dlp cookies (YTDLP_COOKIES_FILE / YTDLP_COOKIES_B64).\n"
+            "2. Ensure the PO token provider is running.\n"
+            "3. Try another video or try again later."
         )
     if "video unavailable" in lowered:
         return "❌ This video is unavailable. Try a different link."
-    return "❌ Failed to download video. Please try again later."
+
+    # Return a slightly more detailed error if possible, but keep it clean
+    return f"❌ Download failed: {error[:200]}"
 
 
 async def _telegram_error_handler(
@@ -351,6 +358,7 @@ async def handle_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     url = msg.text.strip()
+    logger.info("User %s (%s) requested download: %s", msg.from_user.username, msg.from_user.id, url)
     if "youtube.com" not in url and "youtu.be" not in url:
         await msg.reply_text("❌ Please send a valid YouTube link.")
         return
