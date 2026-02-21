@@ -326,7 +326,7 @@ async def _track_upload_progress(
 
 @app.route("/")
 def health_check():
-    return "Bot Active", 200
+    return "<html><body><h1>Bot Status</h1><p>Everything is operational</p></body></html>", 200
 
 
 def run_flask():
