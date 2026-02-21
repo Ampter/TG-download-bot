@@ -153,19 +153,26 @@ def _friendly_download_error(error: str | None) -> str:
         return "❌ Failed to download video. Please try again later."
 
     lowered = error.lower()
-    if (
-        "sign in to confirm" in lowered
-        and "you" in lowered
-        and "not a bot" in lowered
-    ):
+    # Check for various anti-bot or restricted content messages
+    is_antibot = (
+        ("sign in to confirm" in lowered and "not a bot" in lowered)
+        or "confirm you’re not a bot" in lowered
+        or "the following content is not available on this app" in lowered
+    )
+
+    if is_antibot:
         return (
-            "❌ YouTube blocked this download with anti-bot verification.\n"
-            "Try another video or configure yt-dlp cookies "
-            "(YTDLP_COOKIES_FILE / YTDLP_COOKIES_B64)."
+            "❌ YouTube blocked this download with anti-bot verification.\n\n"
+            "To fix this:\n"
+            "1. Configure yt-dlp cookies (YTDLP_COOKIES_FILE / YTDLP_COOKIES_B64).\n"
+            "2. Ensure the PO token provider is running.\n"
+            "3. Try another video or try again later."
         )
     if "video unavailable" in lowered:
         return "❌ This video is unavailable. Try a different link."
-    return "❌ Failed to download video. Please try again later."
+
+    # Return a slightly more detailed error if possible, but keep it clean
+    return f"❌ Download failed: {error[:200]}"
 
 
 async def _telegram_error_handler(
@@ -351,6 +358,10 @@ async def handle_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     url = msg.text.strip()
+    user = update.effective_user
+    username = user.username if user else "unknown"
+    user_id = user.id if user else "unknown"
+    logger.info("Download request: user=%s (%s) url=%s", username, user_id, url)
     if "youtube.com" not in url and "youtu.be" not in url:
         await msg.reply_text("❌ Please send a valid YouTube link.")
         return
@@ -389,6 +400,7 @@ async def handle_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"⚙️ Video is {file_size_mb:.1f}MB, above the upload limit "
             f"({MAX_UPLOAD_SIZE_MB}MB).\nCompressing to fit..."
         )
+        logger.info("Compressing video: %s (size=%.1fMB, target=%dMB)", file_path, file_size_mb, MAX_UPLOAD_SIZE_MB)
         compressed_file_path, compress_error = await _compress_video_to_limit(
             file_path=file_path, max_size_mb=MAX_UPLOAD_SIZE_MB
         )
@@ -415,6 +427,7 @@ async def handle_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             upload_completed = False
             try:
+                logger.info("Starting Telegram upload: %s (size=%.1fMB)", display_title, os.path.getsize(file_path) / (1024 * 1024))
                 await msg.reply_document(
                     document=cast(BinaryIO, progress_video),
                     filename=os.path.basename(file_path),
@@ -425,6 +438,7 @@ async def handle_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     pool_timeout=120,
                 )
                 upload_completed = True
+                logger.info("Telegram upload completed: %s", display_title)
             finally:
                 if upload_completed:
                     progress_video.bytes_read = file_size_bytes
