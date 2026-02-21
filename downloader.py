@@ -1,3 +1,4 @@
+import threading
 import base64
 import json
 import logging
@@ -12,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_MAX_SIZE_MB = int(os.getenv("MAX_VIDEO_SIZE_MB", "2000"))
 _COOKIEFILE_CACHE: Optional[str] = None
+_COOKIE_LOCK = threading.Lock()
 DEFAULT_BGUTIL_BASE_URL = os.getenv(
     "YTDLP_BGUTIL_BASE_URL", "http://127.0.0.1:4416"
 )
@@ -33,22 +35,6 @@ class YdlLogger:
     def error(self, msg):
         logger.error(msg)
 
-
-class YdlLogger:
-    def debug(self, msg):
-        if msg.startswith('[debug] '):
-            logger.debug(msg)
-        else:
-            logger.info(msg)
-
-    def info(self, msg):
-        logger.info(msg)
-
-    def warning(self, msg):
-        logger.warning(msg)
-
-    def error(self, msg):
-        logger.error(msg)
 
 
 def _video_format(max_size_mb: int) -> str:
@@ -82,31 +68,32 @@ def _get_cookiefile_from_env() -> Optional[str]:
             "No cookies provided via YTDLP_COOKIES_FILE or YTDLP_COOKIES_B64")
         return None
 
-    if _COOKIEFILE_CACHE and os.path.exists(_COOKIEFILE_CACHE):
-        logger.debug("Using cached temporary cookie file: %s",
-                     _COOKIEFILE_CACHE)
-        return _COOKIEFILE_CACHE
+    with _COOKIE_LOCK:
+        if _COOKIEFILE_CACHE and os.path.exists(_COOKIEFILE_CACHE):
+            logger.debug("Using cached temporary cookie file: %s",
+                         _COOKIEFILE_CACHE)
+            return _COOKIEFILE_CACHE
 
-    try:
-        logger.info("Decoding YTDLP_COOKIES_B64...")
-        cookie_bytes = base64.b64decode(cookies_b64, validate=True)
-        cookie_text = cookie_bytes.decode("utf-8")
-    except Exception as exc:
-        logger.warning("Failed to decode YTDLP_COOKIES_B64: %s", exc)
-        return None
+        try:
+            logger.info("Decoding YTDLP_COOKIES_B64...")
+            cookie_bytes = base64.b64decode(cookies_b64, validate=True)
+            cookie_text = cookie_bytes.decode("utf-8")
+        except Exception as exc:
+            logger.warning("Failed to decode YTDLP_COOKIES_B64: %s", exc)
+            return None
 
-    try:
-        fd, temp_path = tempfile.mkstemp(
-            prefix="yt-dlp-cookies-", suffix=".txt")
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(cookie_text)
-        os.chmod(temp_path, 0o600)
-        _COOKIEFILE_CACHE = temp_path
-        logger.info("Created temporary cookie file: %s", temp_path)
-        return temp_path
-    except Exception as exc:
-        logger.warning("Failed to create temporary cookie file: %s", exc)
-        return None
+        try:
+            fd, temp_path = tempfile.mkstemp(
+                prefix="yt-dlp-cookies-", suffix=".txt")
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(cookie_text)
+            os.chmod(temp_path, 0o600)
+            _COOKIEFILE_CACHE = temp_path
+            logger.info("Created temporary cookie file: %s", temp_path)
+            return temp_path
+        except Exception as exc:
+            logger.warning("Failed to create temporary cookie file: %s", exc)
+            return None
 
 
 def _is_youtube_antibot_error(message: str) -> bool:
@@ -117,18 +104,6 @@ def _is_youtube_antibot_error(message: str) -> bool:
         or "the following content is not available on this app" in lower
         or "this video is unavailable" in lower and "bot" in lower
     )
-
-
-def _check_bgutil_health() -> bool:
-    try:
-        # Assuming the provider has some health check or just check if port is open
-        # The README says it's an HTTP server. Let's try to hit it.
-        with urllib.request.urlopen(DEFAULT_BGUTIL_BASE_URL, timeout=2) as response:
-            return response.status == 200
-    except Exception as exc:
-        logger.warning(
-            "bgutil provider health check failed at %s: %s", DEFAULT_BGUTIL_BASE_URL, exc)
-        return False
 
 
 def _check_bgutil_health() -> bool:
@@ -165,6 +140,7 @@ def _build_ydl_opts(
                 "player_client": ["web", "mweb", "ios"],
             }
         },
+        "concurrent_fragment_downloads": 5,
         "outtmpl": "downloads/%(title)s.%(ext)s",
         "restrictfilenames": True,
         "logger": YdlLogger(),

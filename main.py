@@ -376,7 +376,7 @@ async def handle_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
             action=ChatAction.UPLOAD_VIDEO,
         )
 
-    file_path, error, video_title, video_author = download_video(
+    file_path, error, video_title, video_author = await asyncio.to_thread(download_video,
         url, max_size_mb=DOWNLOAD_TARGET_SIZE_MB
     )
 
