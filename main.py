@@ -358,7 +358,8 @@ async def handle_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     url = msg.text.strip()
-    logger.info("User %s (%s) requested download: %s", msg.from_user.username, msg.from_user.id, url)
+    logger.info("User %s (%s) requested download: %s",
+                msg.from_user.username, msg.from_user.id, url)
     if "youtube.com" not in url and "youtu.be" not in url:
         await msg.reply_text("❌ Please send a valid YouTube link.")
         return

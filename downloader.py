@@ -16,6 +16,7 @@ DEFAULT_BGUTIL_BASE_URL = os.getenv(
     "YTDLP_BGUTIL_BASE_URL", "http://127.0.0.1:4416"
 )
 
+
 class YdlLogger:
     def debug(self, msg):
         if msg.startswith('[debug] '):
@@ -32,6 +33,7 @@ class YdlLogger:
     def error(self, msg):
         logger.error(msg)
 
+
 def _video_format(max_size_mb: int) -> str:
     max_bytes = max_size_mb * 1024 * 1024
     # Prefer mp4 for Telegram compatibility while allowing large files.
@@ -42,6 +44,7 @@ def _video_format(max_size_mb: int) -> str:
         f"/best[filesize<={max_bytes}]"
         "/best"
     )
+
 
 def _get_cookiefile_from_env() -> Optional[str]:
     global _COOKIEFILE_CACHE
@@ -58,11 +61,13 @@ def _get_cookiefile_from_env() -> Optional[str]:
 
     cookies_b64 = os.getenv("YTDLP_COOKIES_B64")
     if not cookies_b64:
-        logger.info("No cookies provided via YTDLP_COOKIES_FILE or YTDLP_COOKIES_B64")
+        logger.info(
+            "No cookies provided via YTDLP_COOKIES_FILE or YTDLP_COOKIES_B64")
         return None
 
     if _COOKIEFILE_CACHE and os.path.exists(_COOKIEFILE_CACHE):
-        logger.debug("Using cached temporary cookie file: %s", _COOKIEFILE_CACHE)
+        logger.debug("Using cached temporary cookie file: %s",
+                     _COOKIEFILE_CACHE)
         return _COOKIEFILE_CACHE
 
     try:
@@ -86,6 +91,7 @@ def _get_cookiefile_from_env() -> Optional[str]:
         logger.warning("Failed to create temporary cookie file: %s", exc)
         return None
 
+
 def _is_youtube_antibot_error(message: str) -> bool:
     lower = message.lower()
     return (
@@ -95,6 +101,7 @@ def _is_youtube_antibot_error(message: str) -> bool:
         or "this video is unavailable" in lower and "bot" in lower
     )
 
+
 def _check_bgutil_health() -> bool:
     try:
         # Assuming the provider has some health check or just check if port is open
@@ -102,8 +109,10 @@ def _check_bgutil_health() -> bool:
         with urllib.request.urlopen(DEFAULT_BGUTIL_BASE_URL, timeout=2) as response:
             return response.status == 200
     except Exception as exc:
-        logger.warning("bgutil provider health check failed at %s: %s", DEFAULT_BGUTIL_BASE_URL, exc)
+        logger.warning(
+            "bgutil provider health check failed at %s: %s", DEFAULT_BGUTIL_BASE_URL, exc)
         return False
+
 
 def _build_ydl_opts(
     max_size_mb: int,
@@ -130,7 +139,7 @@ def _build_ydl_opts(
         "outtmpl": "downloads/%(title)s.%(ext)s",
         "restrictfilenames": True,
         "logger": YdlLogger(),
-        "verbose": True, # Keep verbose for better logs in our logger
+        "verbose": True,  # Keep verbose for better logs in our logger
     }
     if cookiefile:
         opts["cookiefile"] = cookiefile
@@ -138,6 +147,7 @@ def _build_ydl_opts(
     logger.debug("Built yt-dlp options (cookiefile: %s, disable_innertube: %s)",
                  cookiefile, disable_innertube)
     return opts
+
 
 def download_video(
     url: str,
@@ -151,7 +161,8 @@ def download_video(
     if bgutil_healthy:
         logger.info("bgutil provider is active at %s", DEFAULT_BGUTIL_BASE_URL)
     else:
-        logger.warning("bgutil provider seems down or unreachable at %s. PO tokens might fail.", DEFAULT_BGUTIL_BASE_URL)
+        logger.warning(
+            "bgutil provider seems down or unreachable at %s. PO tokens might fail.", DEFAULT_BGUTIL_BASE_URL)
 
     cookiefile = _get_cookiefile_from_env()
     last_error_text: Optional[str] = None
@@ -188,7 +199,8 @@ def download_video(
                 logger.debug("Expected file path: %s", file_path)
 
                 if not os.path.exists(file_path):
-                    logger.debug("File not found at %s, checking for .mp4", file_path)
+                    logger.debug(
+                        "File not found at %s, checking for .mp4", file_path)
                     base, _ = os.path.splitext(file_path)
                     mp4_path = f"{base}.mp4"
                     if os.path.exists(mp4_path):
@@ -196,7 +208,8 @@ def download_video(
                         logger.debug("Found .mp4 file at %s", file_path)
 
                 if not os.path.exists(file_path):
-                    logger.error("Download completed but output file was not found: %s", file_path)
+                    logger.error(
+                        "Download completed but output file was not found: %s", file_path)
                     return (
                         None,
                         "Download completed but output file was not found",
@@ -208,7 +221,8 @@ def download_video(
                 return file_path, None, title, author
         except Exception as exc:
             last_error_text = str(exc)
-            logger.warning("Attempt failed (disable_innertube=%s): %s", disable_innertube, last_error_text)
+            logger.warning("Attempt failed (disable_innertube=%s): %s",
+                           disable_innertube, last_error_text)
 
             if (
                 _is_youtube_antibot_error(last_error_text)
