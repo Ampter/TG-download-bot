@@ -34,6 +34,23 @@ class YdlLogger:
         logger.error(msg)
 
 
+class YdlLogger:
+    def debug(self, msg):
+        if msg.startswith('[debug] '):
+            logger.debug(msg)
+        else:
+            logger.info(msg)
+
+    def info(self, msg):
+        logger.info(msg)
+
+    def warning(self, msg):
+        logger.warning(msg)
+
+    def error(self, msg):
+        logger.error(msg)
+
+
 def _video_format(max_size_mb: int) -> str:
     max_bytes = max_size_mb * 1024 * 1024
     # Prefer mp4 for Telegram compatibility while allowing large files.
@@ -100,6 +117,18 @@ def _is_youtube_antibot_error(message: str) -> bool:
         or "the following content is not available on this app" in lower
         or "this video is unavailable" in lower and "bot" in lower
     )
+
+
+def _check_bgutil_health() -> bool:
+    try:
+        # Assuming the provider has some health check or just check if port is open
+        # The README says it's an HTTP server. Let's try to hit it.
+        with urllib.request.urlopen(DEFAULT_BGUTIL_BASE_URL, timeout=2) as response:
+            return response.status == 200
+    except Exception as exc:
+        logger.warning(
+            "bgutil provider health check failed at %s: %s", DEFAULT_BGUTIL_BASE_URL, exc)
+        return False
 
 
 def _check_bgutil_health() -> bool:
