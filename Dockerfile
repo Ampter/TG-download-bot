@@ -41,6 +41,7 @@ RUN chmod +x /start.sh
 
 # Set environment for Deno
 ENV PATH="/usr/local/bin:$PATH"
+ENV PYTHONUNBUFFERED=1
 
 # Expose the provider port (optional, for external checks)
 EXPOSE 4416

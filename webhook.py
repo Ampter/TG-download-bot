@@ -19,7 +19,11 @@ from main import (
     start,
 )
 
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+)
 logger = logging.getLogger(__name__)
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 WEBHOOK_PATH = os.getenv("WEBHOOK_PATH", "telegram/webhook").strip("/")
 WEBHOOK_BASE_URL = os.getenv("WEBHOOK_BASE_URL") or os.getenv("WEBHOOK_URL")
