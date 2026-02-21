@@ -1,3 +1,13 @@
+from downloader import download_video
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
+from telegram.error import BadRequest, Conflict
+from telegram.constants import ChatAction
 import asyncio
 import logging
 import os
@@ -13,17 +23,6 @@ from flask import Flask
 from telegram import Update
 376
 
-from telegram.constants import ChatAction
-from telegram.error import BadRequest, Conflict
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    ContextTypes,
-    MessageHandler,
-    filters,
-)
-
-from downloader import download_video
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -363,7 +362,8 @@ async def handle_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     username = user.username if user else "unknown"
     user_id = user.id if user else "unknown"
-    logger.info("Download request: user=%s (%s) url=%s", username, user_id, url)
+    logger.info("Download request: user=%s (%s) url=%s",
+                username, user_id, url)
     if "youtube.com" not in url and "youtu.be" not in url:
         await msg.reply_text("❌ Please send a valid YouTube link.")
         return
@@ -402,7 +402,8 @@ async def handle_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"⚙️ Video is {file_size_mb:.1f}MB, above the upload limit "
             f"({MAX_UPLOAD_SIZE_MB}MB).\nCompressing to fit..."
         )
-        logger.info("Compressing video: %s (size=%.1fMB, target=%dMB)", file_path, file_size_mb, MAX_UPLOAD_SIZE_MB)
+        logger.info("Compressing video: %s (size=%.1fMB, target=%dMB)",
+                    file_path, file_size_mb, MAX_UPLOAD_SIZE_MB)
         compressed_file_path, compress_error = await _compress_video_to_limit(
             file_path=file_path, max_size_mb=MAX_UPLOAD_SIZE_MB
         )
@@ -429,7 +430,8 @@ async def handle_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             upload_completed = False
             try:
-                logger.info("Starting Telegram upload: %s (size=%.1fMB)", display_title, os.path.getsize(file_path) / (1024 * 1024))
+                logger.info("Starting Telegram upload: %s (size=%.1fMB)",
+                            display_title, os.path.getsize(file_path) / (1024 * 1024))
                 await msg.reply_document(
                     document=cast(BinaryIO, progress_video),
                     filename=os.path.basename(file_path),
