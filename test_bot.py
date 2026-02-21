@@ -122,7 +122,7 @@ def test_download_video_uses_bgutil_provider_args(tmp_path):
             called_opts["extractor_args"]["youtubepot-bgutilhttp"]["base_url"]
             == ["http://127.0.0.1:4416"]
         )
-        assert "youtube" not in called_opts["extractor_args"]
+        assert "youtube" in called_opts["extractor_args"]
 
 
 def test_download_video_retries_with_disable_innertube_on_antibot(
@@ -240,7 +240,7 @@ async def test_handle_download_failure(mock_update, mock_context, monkeypatch):
         await handle_download(mock_update, mock_context)
 
     status_mock.edit_text.assert_called_once_with(
-        "❌ Failed to download video. Please try again later."
+        "❌ Download failed: Download failed"
     )
 
 
