@@ -36,7 +36,6 @@ class YdlLogger:
         logger.error(msg)
 
 
-
 def _video_format(max_size_mb: int) -> str:
     max_bytes = max_size_mb * 1024 * 1024
     # Prefer mp4 for Telegram compatibility while allowing large files.

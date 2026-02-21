@@ -377,8 +377,8 @@ async def handle_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     file_path, error, video_title, video_author = await asyncio.to_thread(download_video,
-        url, max_size_mb=DOWNLOAD_TARGET_SIZE_MB
-    )
+                                                                          url, max_size_mb=DOWNLOAD_TARGET_SIZE_MB
+                                                                          )
 
     if not file_path or not os.path.exists(file_path):
         logger.error("Download failed (%s): %s", url, error)
