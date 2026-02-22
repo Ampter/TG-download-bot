@@ -4,10 +4,11 @@ FROM denoland/deno:bin-2.1.9 AS deno_binary
 # Stage 2: Build your Python app
 FROM python:3.12-slim
 
-# Install ffmpeg, curl, and Node.js (required for the provider)
+# Install ffmpeg, curl, git, and Node.js (required for the provider)
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     curl \
+    git \
     nodejs \
     npm \
     && rm -rf /var/lib/apt/lists/*
