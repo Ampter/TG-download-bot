@@ -21,7 +21,6 @@ from urllib.parse import urlparse
 from dotenv import load_dotenv
 from flask import Flask
 from telegram import Update
-376
 
 
 logging.basicConfig(
