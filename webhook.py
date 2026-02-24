@@ -1,6 +1,8 @@
+import asyncio
 import logging
 import os
 
+from flask import Flask, request
 from telegram import Update
 from telegram.error import Conflict
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
@@ -30,6 +32,8 @@ WEBHOOK_BASE_URL = os.getenv("WEBHOOK_BASE_URL") or os.getenv("WEBHOOK_URL")
 WEBHOOK_SECRET_TOKEN = os.getenv("WEBHOOK_SECRET_TOKEN")
 PORT = int(os.getenv("PORT", "10000"))
 
+app = Flask(__name__)
+
 
 def _build_webhook_url() -> str | None:
     if not WEBHOOK_BASE_URL:
@@ -38,6 +42,11 @@ def _build_webhook_url() -> str | None:
     if not WEBHOOK_PATH:
         return base
     return f"{base}/{WEBHOOK_PATH}"
+
+
+@app.route("/")
+def health_check():
+    return "<html><body><h1>Bot Status</h1><p>Everything is operational</p></body></html>", 200
 
 
 def main() -> None:
@@ -69,22 +78,58 @@ def main() -> None:
     if BOT_API_FILE_URL:
         app_builder = app_builder.base_file_url(BOT_API_FILE_URL)
 
-    bot = app_builder.build()
-    bot.add_error_handler(_telegram_error_handler)
-    bot.add_handler(CommandHandler("start", start))
-    bot.add_handler(MessageHandler(
-        filters.TEXT & (~filters.COMMAND), handle_download))
+    application = app_builder.build()
+    application.add_error_handler(_telegram_error_handler)
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(
+        MessageHandler(filters.TEXT & (~filters.COMMAND), handle_download)
+    )
+
+    # Shared event loop for thread-safe updates
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    # Register the webhook endpoint with Flask
+    @app.route(f"/{WEBHOOK_PATH}", methods=["POST"])
+    def webhook_handler():
+        if WEBHOOK_SECRET_TOKEN:
+            token = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
+            if token != WEBHOOK_SECRET_TOKEN:
+                return "Unauthorized", 403
+
+        update = Update.de_json(data=request.get_json(force=True), bot=application.bot)
+        loop.call_soon_threadsafe(application.update_queue.put_nowait, update)
+        return "", 200
+
+    async def run_app():
+        async with application:
+            await application.bot.set_webhook(
+                url=webhook_url,
+                secret_token=WEBHOOK_SECRET_TOKEN or None,
+                drop_pending_updates=True,
+                allowed_updates=Update.ALL_TYPES,
+            )
+            await application.start()
+            while True:
+                await asyncio.sleep(3600)
+
+    # Start Flask in a separate thread for health check and webhook reception
+    from threading import Thread
+    from werkzeug.serving import make_server
+
+    class ServerThread(Thread):
+        def __init__(self, app):
+            Thread.__init__(self, daemon=True)
+            self.server = make_server("0.0.0.0", PORT, app)
+
+        def run(self):
+            logger.info("Starting Flask server on port %s", PORT)
+            self.server.serve_forever()
+
+    ServerThread(app).start()
 
     try:
-        bot.run_webhook(
-            listen="0.0.0.0",
-            port=PORT,
-            url_path=WEBHOOK_PATH,
-            webhook_url=webhook_url,
-            secret_token=WEBHOOK_SECRET_TOKEN or None,
-            drop_pending_updates=True,
-            allowed_updates=Update.ALL_TYPES,
-        )
+        loop.run_until_complete(run_app())
     except Conflict:
         logger.error(
             "Another bot instance is already running with this BOT_TOKEN. "
@@ -96,6 +141,8 @@ def main() -> None:
             PROCESS_ID,
             _token_fingerprint(TOKEN),
         )
+    except Exception as exc:
+        logger.exception("Fatal error in webhook bot: %s", exc)
 
 
 if __name__ == "__main__":
