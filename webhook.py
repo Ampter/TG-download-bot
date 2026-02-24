@@ -97,7 +97,8 @@ def main() -> None:
             if token != WEBHOOK_SECRET_TOKEN:
                 return "Unauthorized", 403
 
-        update = Update.de_json(data=request.get_json(force=True), bot=application.bot)
+        update = Update.de_json(data=request.get_json(
+            force=True), bot=application.bot)
         loop.call_soon_threadsafe(application.update_queue.put_nowait, update)
         return "", 200
 
