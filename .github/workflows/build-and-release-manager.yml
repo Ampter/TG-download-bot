@@ -41,7 +41,7 @@ jobs:
         run: |
           pip install -r requirements.txt --upgrade
           pip install pyinstaller pyinstaller-hooks-contrib
-          pyinstaller --onefile --noconfirm --name tg-download-bot-server main.py
+          pyinstaller --onefile --noconfirm --name tg-download-bot-server src/main.py
       - name: Upload EXE to Preview Release
         uses: softprops/action-gh-release@v2
         with:
@@ -79,7 +79,7 @@ jobs:
         run: |
           pip install -r requirements.txt --upgrade
           pip install pyinstaller
-          pyinstaller --onefile --noconfirm --name tg-download-bot-server main.py
+          pyinstaller --onefile --noconfirm --name tg-download-bot-server src/main.py
       - name: Install LinuxDeploy
         id: install-linuxdeploy
         uses: miurahr/install-linuxdeploy-action@v1.8.0

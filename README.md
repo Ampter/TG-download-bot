@@ -104,7 +104,7 @@ Keep this process running in one terminal.
 ```bash
 cd /path/to/TG-download-bot
 source .venv/bin/activate
-python main.py
+python src/main.py
 ```
 
 ---
