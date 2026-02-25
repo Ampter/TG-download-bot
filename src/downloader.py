@@ -116,9 +116,11 @@ def _check_bgutil_health() -> bool:
             if response.status == 200:
                 data = json.loads(response.read().decode("utf-8"))
                 if "version" in data:
-                    logger.debug("bgutil provider is healthy: version %s", data["version"])
+                    logger.debug(
+                        "bgutil provider is healthy: version %s", data["version"])
                     return True
-                logger.warning("bgutil provider /ping returned 200 but missing version field")
+                logger.warning(
+                    "bgutil provider /ping returned 200 but missing version field")
             else:
                 logger.warning(
                     "bgutil provider /ping returned status %d at %s", response.status, ping_url)
