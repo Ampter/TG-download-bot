@@ -120,7 +120,8 @@ def _check_bgutil_health() -> bool:
     except Exception as exc:
         # If it's a 404, it might be an older version without /ping, but it's still running.
         if hasattr(exc, 'code') and exc.code == 404:
-            logger.info("bgutil provider returned 404 at %s, but port is open (likely active)", ping_url)
+            logger.info(
+                "bgutil provider returned 404 at %s, but port is open (likely active)", ping_url)
             return True
         logger.warning(
             "bgutil provider health check failed at %s: %s", ping_url, exc)
