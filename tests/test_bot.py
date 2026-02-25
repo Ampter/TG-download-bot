@@ -1,3 +1,5 @@
+from main import MAX_UPLOAD_SIZE_MB, handle_download, start
+from downloader import download_video
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -12,9 +14,6 @@ from pathlib import Path
 
 SCRIPTS_DIR = Path(__file__).parent.parent / "src"
 sys.path.append(str(SCRIPTS_DIR))
-
-from downloader import download_video
-from main import MAX_UPLOAD_SIZE_MB, handle_download, start
 
 
 @pytest.fixture
