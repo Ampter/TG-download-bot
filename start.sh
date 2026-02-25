@@ -6,6 +6,8 @@ node /opt/provider/server/build/main.js --port 4416 &
 # Give it a moment to start
 sleep 2
 
+cd src
+
 MODE="${BOT_RUNTIME_MODE:-polling}"
 if [ "$MODE" = "webhook" ]; then
   python webhook.py

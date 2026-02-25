@@ -7,6 +7,12 @@ from telegram import Chat, Message, Update, User
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
+import sys
+from pathlib import Path
+
+SCRIPTS_DIR = Path(__file__).parent.parent / "src"
+sys.path.append(str(SCRIPTS_DIR))
+
 from downloader import download_video
 from main import MAX_UPLOAD_SIZE_MB, handle_download, start
 
