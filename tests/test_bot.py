@@ -1,19 +1,17 @@
+from telegram.ext import ContextTypes
+from telegram.error import BadRequest
+from telegram import Chat, Message, Update, User
+import yt_dlp
+import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
+import os
+from downloader import download_video
+from main import MAX_UPLOAD_SIZE_MB, handle_download, start
 import sys
 from pathlib import Path
 
 SCRIPTS_DIR = Path(__file__).parent.parent / "src"
 sys.path.append(str(SCRIPTS_DIR))
-
-from main import MAX_UPLOAD_SIZE_MB, handle_download, start
-from downloader import download_video
-import os
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
-import yt_dlp
-from telegram import Chat, Message, Update, User
-from telegram.error import BadRequest
-from telegram.ext import ContextTypes
 
 
 @pytest.fixture
