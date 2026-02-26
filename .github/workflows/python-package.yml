@@ -48,7 +48,8 @@ jobs:
       id: test
       continue-on-error: true
       run: |
-        PYTHONPATH=src pytest 2>&1 | tee pytest_output.txt
+        export PYTHONPATH="${PYTHONPATH:-}:$(pwd)/src"
+        pytest 2>&1 | tee pytest_output.txt
   
 
     # New step to create issue on failure
