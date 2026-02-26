@@ -102,31 +102,48 @@ def _is_youtube_antibot_error(message: str) -> bool:
         or "confirm you’re not a bot" in lower
         or "the following content is not available on this app" in lower
         or "this video is unavailable" in lower and "bot" in lower
+        or "too many requests" in lower
+        or "429" in lower
     )
 
 
 def _check_bgutil_health() -> bool:
+    # The bgutil provider has a /ping endpoint that returns version info.
+    # We hit it to ensure the provider is active and responsive.
+    ping_url = f"{DEFAULT_BGUTIL_BASE_URL.rstrip('/')}/ping"
     try:
-        # Assuming the provider has some health check or just check if port is open
-        # The README says it's an HTTP server. Let's try to hit it.
-        with urllib.request.urlopen(DEFAULT_BGUTIL_BASE_URL, timeout=2) as response:
-            return response.status == 200
+        with urllib.request.urlopen(ping_url, timeout=2) as response:
+            if response.status == 200:
+                data = json.loads(response.read().decode("utf-8"))
+                if "version" in data:
+                    logger.debug(
+                        "bgutil provider is healthy: version %s", data["version"])
+                    return True
+                logger.warning(
+                    "bgutil provider /ping returned 200 but missing version field")
+            else:
+                logger.warning(
+                    "bgutil provider /ping returned status %d at %s", response.status, ping_url)
     except Exception as exc:
         logger.warning(
-            "bgutil provider health check failed at %s: %s", DEFAULT_BGUTIL_BASE_URL, exc)
-        return False
+            "bgutil provider health check failed at %s: %s", ping_url, exc)
+    return False
 
 
 def _build_ydl_opts(
     max_size_mb: int,
     cookiefile: Optional[str],
     disable_innertube: bool = False,
+    clients: Optional[list[str]] = None,
 ) -> dict[str, Any]:
     provider_args: dict[str, list[str]] = {
         "base_url": [DEFAULT_BGUTIL_BASE_URL]
     }
     if disable_innertube:
         provider_args["disable_innertube"] = ["1"]
+
+    if not clients:
+        clients = ["ios", "android", "web", "mweb", "tv"]
 
     opts: dict[str, Any] = {
         "format": _video_format(max_size_mb),
@@ -136,7 +153,7 @@ def _build_ydl_opts(
             # Plugin-specific provider args for bgutil HTTP token provider.
             "youtubepot-bgutilhttp": provider_args,
             "youtube": {
-                "player_client": ["web", "mweb", "ios"],
+                "player_client": clients,
             }
         },
         "concurrent_fragment_downloads": 5,
@@ -148,8 +165,8 @@ def _build_ydl_opts(
     if cookiefile:
         opts["cookiefile"] = cookiefile
 
-    logger.debug("Built yt-dlp options (cookiefile: %s, disable_innertube: %s)",
-                 cookiefile, disable_innertube)
+    logger.debug("Built yt-dlp options (cookiefile: %s, disable_innertube: %s, clients: %s)",
+                 cookiefile, disable_innertube, clients)
     return opts
 
 
@@ -172,17 +189,31 @@ def download_video(
     last_error_text: Optional[str] = None
     retry_with_legacy_innertube = not cookiefile
 
-    for disable_innertube in (False, True):
+    # Strategy 1: Default clients (ios, android, web, mweb, tv)
+    # Strategy 2: Same but with disable_innertube=1
+    # Strategy 3: Just ios and android (sometimes more reliable)
+
+    attempts = [
+        {"disable_innertube": False, "clients": None},
+        {"disable_innertube": True, "clients": None},
+        {"disable_innertube": False, "clients": ["ios", "android"]},
+    ]
+
+    for attempt in attempts:
+        disable_innertube = attempt["disable_innertube"]
+        clients = attempt["clients"]
+
         if disable_innertube and not retry_with_legacy_innertube:
             continue
 
-        if disable_innertube:
-            logger.info("Retrying with disable_innertube=1...")
+        logger.info("Download attempt with disable_innertube=%s, clients=%s",
+                    disable_innertube, clients or "default")
 
         ydl_opts = _build_ydl_opts(
             max_size_mb=max_size_mb,
             cookiefile=cookiefile,
             disable_innertube=disable_innertube,
+            clients=clients,
         )
         ydl_opts["outtmpl"] = f"{download_folder}/%(title)s.%(ext)s"
 
@@ -225,31 +256,24 @@ def download_video(
                 return file_path, None, title, author
         except Exception as exc:
             last_error_text = str(exc)
-            logger.warning("Attempt failed (disable_innertube=%s): %s",
-                           disable_innertube, last_error_text)
-
-            if (
-                _is_youtube_antibot_error(last_error_text)
-                and not disable_innertube
-                and retry_with_legacy_innertube
-            ):
-                logger.warning(
-                    "Anti-bot check hit. Retrying with disable_innertube=1."
-                )
-                continue
+            logger.warning("Attempt failed (disable_innertube=%s, clients=%s): %s",
+                           disable_innertube, clients or "default", last_error_text)
 
             if _is_youtube_antibot_error(last_error_text):
-                if not cookiefile:
-                    logger.error(
-                        "Anti-bot verification failed and no cookies provided. URL: %s", url
-                    )
-                else:
-                    logger.error(
-                        "Anti-bot verification failed even with cookies. URL: %s", url
-                    )
+                logger.warning("Anti-bot check hit. Moving to next strategy.")
+                continue
             else:
                 logger.error("Download exception: %s", exc, exc_info=True)
+                return None, last_error_text, None, None
 
-            return None, last_error_text, None, None
+    if _is_youtube_antibot_error(last_error_text):
+        if not cookiefile:
+            logger.error(
+                "Anti-bot verification failed and no cookies provided. URL: %s", url
+            )
+        else:
+            logger.error(
+                "Anti-bot verification failed even with cookies. URL: %s", url
+            )
 
     return None, last_error_text or "Download failed", None, None
