@@ -1,3 +1,9 @@
+import sys
+from pathlib import Path
+
+SCRIPTS_DIR = Path(__file__).parent.parent / "src"
+sys.path.append(str(SCRIPTS_DIR))
+
 from main import MAX_UPLOAD_SIZE_MB, handle_download, start
 from downloader import download_video
 import os
@@ -8,12 +14,6 @@ import yt_dlp
 from telegram import Chat, Message, Update, User
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
-
-import sys
-from pathlib import Path
-
-SCRIPTS_DIR = Path(__file__).parent.parent / "src"
-sys.path.append(str(SCRIPTS_DIR))
 
 
 @pytest.fixture

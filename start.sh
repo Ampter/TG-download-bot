@@ -4,13 +4,13 @@ set -euo pipefail
 # Start the bgutil provider HTTP server on port 4416
 node /opt/provider/server/build/main.js --port 4416 &
 # Give it a moment to start
-sleep 2
+sleep 5
 
-cd src
+export PYTHONPATH=$PYTHONPATH:$(pwd)/src
 
 MODE="${BOT_RUNTIME_MODE:-polling}"
 if [ "$MODE" = "webhook" ]; then
-  python webhook.py
+  python src/webhook.py
 else
-  python main.py
+  python src/main.py
 fi

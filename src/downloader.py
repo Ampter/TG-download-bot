@@ -107,10 +107,12 @@ def _is_youtube_antibot_error(message: str) -> bool:
 
 def _check_bgutil_health() -> bool:
     try:
-        # Assuming the provider has some health check or just check if port is open
-        # The README says it's an HTTP server. Let's try to hit it.
-        with urllib.request.urlopen(DEFAULT_BGUTIL_BASE_URL, timeout=2) as response:
-            return response.status == 200
+        url = f"{DEFAULT_BGUTIL_BASE_URL.rstrip('/')}/ping"
+        with urllib.request.urlopen(url, timeout=2) as response:
+            if response.status != 200:
+                return False
+            data = json.loads(response.read().decode())
+            return "version" in data
     except Exception as exc:
         logger.warning(
             "bgutil provider health check failed at %s: %s", DEFAULT_BGUTIL_BASE_URL, exc)
@@ -136,7 +138,7 @@ def _build_ydl_opts(
             # Plugin-specific provider args for bgutil HTTP token provider.
             "youtubepot-bgutilhttp": provider_args,
             "youtube": {
-                "player_client": ["web", "mweb", "ios"],
+                "player_client": ["web", "mweb", "ios", "android"],
             }
         },
         "concurrent_fragment_downloads": 5,
