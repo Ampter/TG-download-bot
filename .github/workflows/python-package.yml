@@ -48,6 +48,7 @@ jobs:
       id: test
       continue-on-error: true
       run: |
+        export PYTHONPATH=$PYTHONPATH:$(pwd)/src
         pytest 2>&1 | tee pytest_output.txt
   
 
