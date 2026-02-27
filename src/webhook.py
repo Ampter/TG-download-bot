@@ -99,7 +99,7 @@ def main() -> None:
 
         update = Update.de_json(data=request.get_json(
             force=True), bot=application.bot)
-        loop.call_soon_threadsafe(application.update_queue.put_nowait, update)
+        asyncio.run_coroutine_threadsafe(application.process_update(update), loop)
         return "", 200
 
     async def run_app():
