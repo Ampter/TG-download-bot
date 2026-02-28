@@ -1,3 +1,9 @@
+import sys
+from pathlib import Path
+
+SCRIPTS_DIR = Path(__file__).parent.parent / "src"
+sys.path.append(str(SCRIPTS_DIR))
+
 from telegram.ext import ContextTypes
 from telegram.error import BadRequest
 from telegram import Chat, Message, Update, User
@@ -7,11 +13,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import os
 from downloader import download_video
 from main import MAX_UPLOAD_SIZE_MB, handle_download, start
-import sys
-from pathlib import Path
-
-SCRIPTS_DIR = Path(__file__).parent.parent / "src"
-sys.path.append(str(SCRIPTS_DIR))
 
 
 @pytest.fixture
