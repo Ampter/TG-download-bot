@@ -6,11 +6,12 @@ node /opt/provider/server/build/main.js --port 4416 &
 # Give it a moment to start
 sleep 5
 
-export PYTHONPATH="${PYTHONPATH:-}:$(pwd)/src"
+# Install the package in editable mode to handle imports correctly
+pip install -e .
 
 MODE="${BOT_RUNTIME_MODE:-polling}"
 if [ "$MODE" = "webhook" ]; then
-  python src/webhook.py
+  python -m src.webhook
 else
-  python src/main.py
+  python -m src.main
 fi

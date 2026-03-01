@@ -7,7 +7,7 @@ from telegram import Update
 from telegram.error import Conflict
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
 
-from main import (
+from .main import (
     APP_ENV,
     BOT_API_BASE_URL,
     BOT_API_FILE_URL,
