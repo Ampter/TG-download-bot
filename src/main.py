@@ -1,4 +1,4 @@
-from downloader import download_video
+from .downloader import download_video
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,

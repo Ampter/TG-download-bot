@@ -5,13 +5,8 @@ import yt_dlp
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 import os
-from downloader import download_video
-from main import MAX_UPLOAD_SIZE_MB, handle_download, start
-import sys
-from pathlib import Path
-
-SCRIPTS_DIR = Path(__file__).parent.parent / "src"
-sys.path.append(str(SCRIPTS_DIR))
+from src.downloader import download_video
+from src.main import MAX_UPLOAD_SIZE_MB, handle_download, start
 
 
 @pytest.fixture
@@ -196,7 +191,7 @@ async def test_handle_download_valid_youtube(
     fake_mp4.write_bytes(b"x" * 1024)
 
     monkeypatch.setattr(
-        "main.download_video",
+        "src.main.download_video",
         lambda *args, **kwargs: (str(fake_mp4), None,
                                  "Video title", "Video author"),
     )
@@ -235,7 +230,7 @@ async def test_handle_download_failure(mock_update, mock_context, monkeypatch):
         return_value=status_mock)
 
     monkeypatch.setattr(
-        "main.download_video",
+        "src.main.download_video",
         lambda *args, **kwargs: (None, "Download failed", None, None),
     )
 
@@ -257,7 +252,7 @@ async def test_handle_download_antibot_failure_message(
         return_value=status_mock)
 
     monkeypatch.setattr(
-        "main.download_video",
+        "src.main.download_video",
         lambda *args, **kwargs: (
             None,
             "ERROR: [youtube] xyz: Sign in to confirm you're not a bot",
@@ -288,13 +283,13 @@ async def test_handle_download_above_configured_limit(
     fake_mp4.write_bytes(b"x" * 1024)
 
     monkeypatch.setattr(
-        "main.download_video",
+        "src.main.download_video",
         lambda *args, **kwargs: (str(fake_mp4), None,
                                  "Video title", "Video author"),
     )
-    monkeypatch.setattr("main.MAX_UPLOAD_SIZE_MB", 0)
+    monkeypatch.setattr("src.main.MAX_UPLOAD_SIZE_MB", 0)
     monkeypatch.setattr(
-        "main._compress_video_to_limit",
+        "src.main._compress_video_to_limit",
         AsyncMock(return_value=(None, "Compression failed")),
     )
 
@@ -318,7 +313,7 @@ async def test_handle_download_telegram_413(
     fake_mp4.write_bytes(b"x" * 1024)
 
     monkeypatch.setattr(
-        "main.download_video",
+        "src.main.download_video",
         lambda *args, **kwargs: (str(fake_mp4), None,
                                  "Video title", "Video author"),
     )
