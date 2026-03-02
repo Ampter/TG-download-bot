@@ -120,7 +120,13 @@ def test_download_video_uses_bgutil_provider_args(tmp_path):
             called_opts["extractor_args"]["youtubepot-bgutilhttp"]["base_url"]
             == ["http://127.0.0.1:4416"]
         )
-        assert "youtube" in called_opts["extractor_args"]
+        assert (
+            called_opts["extractor_args"]["youtube"]["player_client"]
+            == ["ios", "android", "web", "mweb", "tv"]
+        )
+        assert (
+            "po_token" in called_opts["extractor_args"]["youtube"]
+        )
 
 
 def test_download_video_retries_with_disable_innertube_on_antibot(
@@ -163,6 +169,12 @@ def test_download_video_retries_with_disable_innertube_on_antibot(
         )
         assert (
             second_opts["extractor_args"]["youtubepot-bgutilhttp"][
+                "disable_innertube"
+            ]
+            == ["1"]
+        )
+        assert (
+            second_opts["extractor_args"]["youtube"][
                 "disable_innertube"
             ]
             == ["1"]
@@ -339,9 +351,12 @@ async def test_provider_integration():
         "format": "best",
         "noplaylist": True,
         "extractor_args": {
+            "youtubepot-bgutilhttp": {
+                "base_url": ["http://127.0.0.1:4416"]
+            },
             "youtube": {
                 "player_client": ["android", "web"],
-                "po_token": "bgutilhttp:base_url=http://127.0.0.1:4416",
+                "po_token": "web+bgutilhttp:base_url=http://127.0.0.1:4416",
             }
         },
         "quiet": True,

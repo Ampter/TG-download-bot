@@ -139,11 +139,17 @@ def _build_ydl_opts(
     provider_args: dict[str, list[str]] = {
         "base_url": [DEFAULT_BGUTIL_BASE_URL]
     }
+    youtube_args: dict[str, Any] = {
+        "player_client": clients if clients else ["ios", "android", "web", "mweb", "tv"],
+        "po_token": (
+            f"web+bgutilhttp:base_url={DEFAULT_BGUTIL_BASE_URL},"
+            f"ios+bgutilhttp:base_url={DEFAULT_BGUTIL_BASE_URL},"
+            f"android+bgutilhttp:base_url={DEFAULT_BGUTIL_BASE_URL}"
+        ),
+    }
     if disable_innertube:
         provider_args["disable_innertube"] = ["1"]
-
-    if not clients:
-        clients = ["ios", "android", "web", "mweb", "tv"]
+        youtube_args["disable_innertube"] = ["1"]
 
     opts: dict[str, Any] = {
         "format": _video_format(max_size_mb),
@@ -152,9 +158,7 @@ def _build_ydl_opts(
         "extractor_args": {
             # Plugin-specific provider args for bgutil HTTP token provider.
             "youtubepot-bgutilhttp": provider_args,
-            "youtube": {
-                "player_client": clients,
-            }
+            "youtube": youtube_args,
         },
         "concurrent_fragment_downloads": 5,
         "outtmpl": "downloads/%(title)s.%(ext)s",
