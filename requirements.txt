@@ -1,6 +1,6 @@
 python-telegram-bot
 python-dotenv
-yt-dlp==2026.2.21
+yt-dlp==2026.3.3
 pytest
 pytest-asyncio
 pytest-mock
