@@ -11,7 +11,7 @@ requires-python = ">=3.10"
 dependencies = [
     "python-telegram-bot",
     "python-dotenv",
-    "yt-dlp==2026.3.17",
+    "yt-dlp==2026.7.4",
     "flask",
     "bgutil-ytdlp-pot-provider",
 ]
